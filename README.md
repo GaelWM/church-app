@@ -39,3 +39,9 @@ bun run typecheck
 - Every parish table has row-level security driven by `SET LOCAL app.parish_ids` per request transaction.
 - Separation of duties: nobody validates what they entered; Administrateur never enters/validates; Caissier/Trésorier/Pasteur/Administrateur profiles cannot be combined in one parish.
 - Excel/PDF exports and the reçu are generated in the browser (keeps Worker CPU low).
+
+## UI
+The web app uses [shadcn/ui](https://ui.shadcn.com) (radix, `radix-nova` preset, Tailwind v4, Lucide icons). Generated components live in
+`apps/web/src/components/ui/`; add more with `cd apps/web && bunx shadcn@latest add <component>`. App-level wrappers
+(`Card`, `Field`, `DataTable`, `StatusBadge`, …) are in `apps/web/src/components/common.tsx`. Selects use shadcn's `NativeSelect`
+so they work directly with React Hook Form's `register`.
