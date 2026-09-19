@@ -23,6 +23,28 @@ jobs:
       # Owner (migration) credentials: DIRECT Neon URL. The Worker itself uses the app role via Hyperdrive.
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
+      - name: Check required secrets and variables for this environment
+        run: |
+          missing=0
+          check() { if [ -z "$2" ]; then echo "::error::Missing $1 '$3' in GitHub → Settings → Environments → $TARGET"; missing=1; fi; }
+          check secret   "$S_DATABASE_URL"         DATABASE_URL
+          check secret   "$S_APP_DB_PASSWORD"      APP_DB_PASSWORD
+          check secret   "$S_CF_TOKEN"             CLOUDFLARE_API_TOKEN
+          check secret   "$S_CF_ACCOUNT"           CLOUDFLARE_ACCOUNT_ID
+          check variable "$V_APP_URL"              APP_URL
+          check variable "$V_AUTH0_DOMAIN"         AUTH0_DOMAIN
+          check variable "$V_AUTH0_CLIENT_ID"      AUTH0_CLIENT_ID
+          check variable "$V_AUTH0_AUDIENCE"       AUTH0_AUDIENCE
+          [ "$missing" = 0 ] || { echo "See README → Go live → step 1 (GitHub)."; exit 1; }
+        env:
+          S_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          S_APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+          S_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          S_CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          V_APP_URL: ${{ vars.APP_URL }}
+          V_AUTH0_DOMAIN: ${{ vars.AUTH0_DOMAIN }}
+          V_AUTH0_CLIENT_ID: ${{ vars.AUTH0_CLIENT_ID }}
+          V_AUTH0_AUDIENCE: ${{ vars.AUTH0_AUDIENCE }}
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile

@@ -1,8 +1,9 @@
 import { createDb } from "./client";
+import { requireDatabaseUrl } from "./env";
 import { categories, funds } from "./schema";
 import { BANK_CATEGORIES, DEPENSE_CATEGORIES, RECETTE_CATEGORIES } from "./seed-data";
 
-const db = createDb(process.env.DATABASE_URL!);
+const db = createDb(requireDatabaseUrl());
 const [construction] = await db.insert(funds).values({ name: "Construction", description: "Achat parcelle et construction" })
   .onConflictDoNothing().returning();
 const fundId = construction?.id ?? (await db.select().from(funds))[0]?.id;

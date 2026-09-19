@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import postgres from "postgres";
+import { requireDatabaseUrl } from "./env";
 
 // Applies drizzle-generated SQL (0000_*, ...) then hand-written safeguards (9999_*), once each.
-const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+const sql = postgres(requireDatabaseUrl(), { max: 1 });
 await sql`create table if not exists _migrations (name text primary key, applied_at timestamptz default now())`;
 const dir = join(import.meta.dir, "../migrations");
 for (const f of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {

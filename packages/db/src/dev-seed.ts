@@ -1,9 +1,10 @@
 /** Demo data for local development only (idempotent). Users log in via the dev picker. */
 import { eq } from "drizzle-orm";
 import { createDb } from "./client";
+import { requireDatabaseUrl } from "./env";
 import { accounts, departments, exchangeRates, members, parishes, userParishRoles, users } from "./schema";
 
-const db = createDb(process.env.DATABASE_URL!);
+const db = createDb(requireDatabaseUrl());
 let [p] = await db.select().from(parishes).where(eq(parishes.code, "KIN01"));
 if (!p) [p] = await db.insert(parishes).values({ name: "Paroisse Centrale (démo)", code: "KIN01", city: "Kinshasa" }).returning();
 

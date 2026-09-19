@@ -4,6 +4,7 @@
  *   DATABASE_URL=... bun src/bootstrap.ts --parish "Paroisse Centrale" --code KIN01 --email a@b.org --name "Nom" --auth0-id "auth0|abc"
  */
 import { createDb } from "./client";
+import { requireDatabaseUrl } from "./env";
 import { parishes, userParishRoles, users } from "./schema";
 
 const arg = (n: string) => {
@@ -13,7 +14,7 @@ const arg = (n: string) => {
   return v;
 };
 
-const db = createDb(process.env.DATABASE_URL!);
+const db = createDb(requireDatabaseUrl());
 const [p] = await db.insert(parishes).values({ name: arg("parish"), code: arg("code") }).returning();
 const [u] = await db.insert(users).values({ auth0Id: arg("auth0-id"), email: arg("email"), fullName: arg("name") }).returning();
 await db.insert(userParishRoles).values({ userId: u!.id, parishId: p!.id, role: "administrateur" });

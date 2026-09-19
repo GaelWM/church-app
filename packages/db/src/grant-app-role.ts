@@ -9,15 +9,15 @@
  * migrations (run as the same owner) usable by the app role without another grant.
  */
 import postgres from "postgres";
+import { requireDatabaseUrl } from "./env";
 
 const role = process.env.APP_DB_ROLE ?? "app_user";
 const password = process.env.APP_DB_PASSWORD;
 if (!/^[a-z_][a-z0-9_]{0,62}$/.test(role)) throw new Error("APP_DB_ROLE must be a plain lowercase identifier");
 if (!password) throw new Error("APP_DB_PASSWORD is required");
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL (owner) is required");
 
 const literal = (v: string) => `'${v.replaceAll("'", "''")}'`;
-const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+const sql = postgres(requireDatabaseUrl(), { max: 1 });
 
 const statements = [
   `do $$ begin
