@@ -36,7 +36,7 @@ export function ConfigurationPage() {
     <>
       <PageHeader title="Configuration" />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mb-4">
-        <TabsList>{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => <TabsTrigger key={t} value={t}>{l}</TabsTrigger>)}</TabsList>
+        <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => <TabsTrigger key={t} value={t}>{l}</TabsTrigger>)}</TabsList>
       </Tabs>
       {tab === "users" && <Users />}{tab === "parishes" && <Parishes />}{tab === "accounts" && <Accounts />}
       {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}

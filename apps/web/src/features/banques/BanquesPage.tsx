@@ -39,7 +39,7 @@ export function BanquesPage() {
     <>
       <PageHeader title="Banques" />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="mb-4">
-        <TabsList>
+        <TabsList variant="line">
           {TAB_KEYS.map((t) => <TabsTrigger key={t} value={t}>{TAB_LABELS["/banques"]![t]}</TabsTrigger>)}
         </TabsList>
       </Tabs>
