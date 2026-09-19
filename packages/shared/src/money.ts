@@ -41,6 +41,6 @@ export function formatAmount(minor: bigint | number, currency: Currency, locale 
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-    currencyDisplay: currency === "CDF" ? "code" : "symbol",
-  }).format(value);
+    currencyDisplay: "code", // "USD" rather than fr-FR's "$US"; same convention as CDF
+  }).format(value).replace(/\u202f/g, "\u00a0"); // fr-FR's narrow space is nearly invisible in some fonts; use a regular no-break space
 }

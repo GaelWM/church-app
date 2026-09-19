@@ -4,7 +4,7 @@ import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { categories, periods, transactionEvents, transactions, type Tx } from "@church/db";
-import { rateToScaled, toUsdMinor } from "@church/shared";
+import { pastDate, rateToScaled, toUsdMinor } from "@church/shared";
 import type { AppEnv } from "../env";
 import { parishScope, requireParish, requirePerm } from "../middleware/auth";
 import { audit } from "../services/audit";
@@ -12,7 +12,7 @@ import { getAccount, nextReference, rateOn, usdEquivalent } from "../services/le
 import { run } from "../services/run";
 
 const uuid = z.string().uuid();
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const date = pastDate;
 const amount = z.coerce.bigint().positive();
 
 const bankOpSchema = z.discriminatedUnion("type", [

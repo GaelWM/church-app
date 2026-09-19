@@ -2,17 +2,14 @@ import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Currency } from "@church/shared";
 import { useApi } from "../../core/api";
-import { fmtDate, money, usd } from "../../core/format";
+import { fmtDate, fmtMonth, label, usd } from "../../core/format";
 import { useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
-import { BarChart3, Banknote, CheckCheck, CircleDollarSign, Coins, HandCoins, Landmark, ReceiptText, Smartphone, Tags, TrendingDown, TrendingUp, Users, Wallet, type LucideIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { Card, DataTable, Provisional, PageHeader, StatCard } from "../../components/common";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable, Money, PageHeader, Provisional, Section } from "../../components/common";
+import { cn } from "@/lib/utils";
 
 interface Dash {
   provisional: boolean;
@@ -25,7 +22,40 @@ interface Dash {
   attendance: { service_date: string; service_type: string; total: number; offering_usd: string }[];
 }
 
-const ACCOUNT_ICON: Record<string, LucideIcon> = { caisse: Banknote, banque: Landmark, mobile_money: Smartphone };
+function Segmented({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const opt = (v: boolean, text: string) => (
+    <button type="button" aria-pressed={value === v} onClick={() => onChange(v)}
+      className={cn("rounded px-3 py-1 text-sm transition-colors", value === v ? "bg-card font-medium shadow-xs" : "text-muted-foreground hover:text-foreground")}>{text}</button>
+  );
+  return <div role="group" aria-label="Périmètre des écritures" className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">{opt(false, "Validées")}{opt(true, "Avec en attente")}</div>;
+}
+
+/** Paired income/expense columns per month (USD equivalent). Hover a column for the exact amounts. */
+function MonthlyChart({ months, flow }: { months: string[]; flow: (m: string, kind: string) => bigint }) {
+  const shown = months.slice(-12);
+  const max = shown.reduce((a, m) => [flow(m, "recette"), flow(m, "depense")].reduce((x, v) => (v > x ? v : x), a), 1n);
+  const pct = (v: bigint) => Math.max(v > 0n ? 2 : 0, Number((v * 100n) / max));
+  return (
+    <div>
+      <div className="mb-3 flex gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-chart-1" />Recettes</span>
+        <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-chart-2" />Dépenses</span>
+      </div>
+      <div className="flex h-44 items-end gap-3 border-b">
+        {shown.map((m) => {
+          const r = flow(m, "recette"), d = flow(m, "depense");
+          return (
+            <div key={m} className="flex h-full min-w-0 flex-1 items-end justify-center gap-1" title={`${fmtMonth(m)} — recettes ${usd(r)}, dépenses ${usd(d)}, net ${usd(r - d)}`}>
+              <div className="w-full max-w-8 rounded-t-sm bg-chart-1" style={{ height: `${pct(r)}%` }} />
+              <div className="w-full max-w-8 rounded-t-sm bg-chart-2" style={{ height: `${pct(d)}%` }} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex gap-3">{shown.map((m) => <span key={m} className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground">{fmtMonth(m)}</span>)}</div>
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const api = useApi();
@@ -42,79 +72,96 @@ export function DashboardPage() {
   const balances = d?.balances ?? [];
   const total = (cur: Currency) => balances.filter((b) => b.currency === cur).reduce((a, b) => a + BigInt(b.balance), 0n);
   // Flows use each entry's own stored rate; balances are shown per currency, never silently converted.
-  const months = [...new Set((d?.monthly ?? []).map((m) => m.month))];
+  const months = [...new Set((d?.monthly ?? []).map((m) => m.month))].sort();
   const flow = (month: string, kind: string) => (d?.monthly ?? []).filter((m) => m.month === month && m.kind === kind).reduce((a, m) => a + BigInt(m.total_usd), 0n);
-  const max = months.reduce((a, m) => { const v = flow(m, "recette") > flow(m, "depense") ? flow(m, "recette") : flow(m, "depense"); return v > a ? v : a; }, 1n);
+  const latest = months.at(-1);
+  const net = latest ? flow(latest, "recette") - flow(latest, "depense") : 0n;
   const myPending = d ? (s.can("transaction.validate1") ? d.pending.awaiting_first : 0) + (s.can("transaction.validate2") ? d.pending.awaiting_second : 0) : 0;
 
   return (
     <>
-      <PageHeader title={<>Tableau de bord {d?.provisional && <Provisional />}</>} icon={BarChart3}>
+      <PageHeader title={<>Tableau de bord {d?.provisional && <Provisional />}</>}>
         <span className="flex items-center gap-3">
           {q.isFetching && !loading && <Spinner className="text-muted-foreground" />}
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={provisional} onCheckedChange={(v) => setProvisional(v === true)} /> Inclure les écritures en attente (provisoire)</label>
+          <Segmented value={provisional} onChange={setProvisional} />
         </span>
       </PageHeader>
 
-      <div className="stat-grid">
-        <StatCard label="Total CDF" icon={Coins} loading={loading} value={money(total("CDF"), "CDF")} />
-        <StatCard label="Total USD" icon={CircleDollarSign} loading={loading} value={money(total("USD"), "USD")} />
-        {(loading || myPending > 0) && <StatCard label="À valider par vous" icon={CheckCheck} loading={loading} value={myPending} />}
-      </div>
-
-      <Card title="Soldes par compte" icon={Wallet}>
-        <DataTable loading={loading} emptyIcon={Wallet} empty="Aucun compte" rows={balances} columns={[
-          { header: "Compte", cell: (b) => { const Icon = ACCOUNT_ICON[b.type] ?? Wallet; return <span className="flex items-center gap-2"><Icon className="size-4 text-muted-foreground" />{b.name}</span>; } },
-          { header: "Type", cell: (b) => b.type }, { header: "Solde", align: "right", cell: (b) => money(b.balance, b.currency) },
-        ]} />
-      </Card>
-
-      <Card title="Recettes et dépenses par mois (équivalent USD)" icon={BarChart3}>
-        {loading && <div role="status" aria-label="Chargement" className="space-y-4">{[0, 1, 2].map((i) => <div key={i} className="space-y-1.5"><Skeleton className="h-4 w-1/3" /><Skeleton className="h-2 w-full" /><Skeleton className="h-2 w-2/3" /></div>)}</div>}
-        {!loading && months.length === 0 && <p className="muted">Aucune donnée.</p>}
-        {months.map((m) => (
-          <div key={m} className="mb-2.5">
-            <div className="flex justify-between"><b>{m}</b><span className="flex items-center gap-1.5">{flow(m, "recette") >= flow(m, "depense") ? <TrendingUp className="size-4 text-emerald-600" /> : <TrendingDown className="size-4 text-destructive" />}Résultat net : {usd(flow(m, "recette") - flow(m, "depense"))}</span></div>
-            <div className="h-2 overflow-hidden rounded bg-muted" title="Recettes"><i className="block h-full" style={{ width: `${Number((flow(m, "recette") * 100n) / max)}%`, background: "var(--color-emerald-600)" }} /></div>
-            <div className="mt-0.5 h-2 overflow-hidden rounded bg-muted" title="Dépenses"><i className="block h-full" style={{ width: `${Number((flow(m, "depense") * 100n) / max)}%`, background: "var(--destructive)" }} /></div>
-            <small className="text-muted-foreground">Recettes {usd(flow(m, "recette"))} · Dépenses {usd(flow(m, "depense"))}</small>
+      <div className="mb-10 grid grid-cols-2 gap-x-6 border-b pb-8 sm:gap-x-10 lg:grid-cols-[1fr_1fr_1fr]">
+        {(["CDF", "USD"] as const).map((cur, i) => (
+          <div key={cur} className={cn("min-w-0", i > 0 && "border-l pl-4 sm:pl-10")}>
+            <div className="label-caps">Solde {cur}</div>
+            {loading ? <Skeleton className="mt-2 h-10 w-44" /> : <Money value={total(cur)} currency={cur} className="stat mt-1 block text-2xl sm:text-5xl" />}
           </div>
         ))}
-      </Card>
-
-      <Card title="Principales catégories (comparées à la période précédente)" icon={Tags}>
-        <DataTable loading={loading} emptyIcon={Tags} empty="Aucune écriture validée sur la période" rows={(d?.topCategories ?? []).map((c) => ({ ...c, id: c.kind + c.name }))} columns={[
-          { header: "Catégorie", cell: (c) => c.name }, { header: "Type", cell: (c) => c.kind },
-          { header: "Total", align: "right", cell: (c) => usd(c.total_usd) },
-          { header: "Récent vs précédent", align: "right", cell: (c) => {
-            const r = Number(c.recent_half_usd), p = Number(c.previous_half_usd);
-            if (!p) return "—";
-            const up = r >= p;
-            return <span className={`inline-flex items-center gap-1 ${up ? "text-emerald-600" : "text-destructive"}`}>{up ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}{up ? "+" : ""}{Math.round(((r - p) / p) * 100)} %</span>;
-          } },
-        ]} />
-      </Card>
-
-      <div className="stat-grid">
-        <Card title="Promesses de dons" icon={HandCoins}>
-          <DataTable loading={loading} emptyIcon={HandCoins} empty="Aucune promesse" rows={d?.pledges ?? []} columns={[
-            { header: "Donateur", cell: (p) => p.donor_name ?? "—" }, { header: "Promis", align: "right", cell: (p) => money(p.promised, p.currency) },
-            { header: "Reçu", align: "right", cell: (p) => money(p.received, p.currency) }, { header: "Reste", align: "right", cell: (p) => money(BigInt(p.promised) - BigInt(p.received), p.currency) },
-          ]} />
-        </Card>
-        <Card title="Engagements de dépenses à venir" icon={ReceiptText}>
-          <DataTable loading={loading} emptyIcon={ReceiptText} empty="Aucun engagement à venir" rows={d?.obligations ?? []} columns={[
-            { header: "Bénéficiaire", cell: (o) => o.payee }, { header: "Échéance", cell: (o) => fmtDate(o.due_date) }, { header: "Montant", align: "right", cell: (o) => money(o.amount, o.currency) },
-          ]} />
-        </Card>
+        <div className="col-span-2 mt-6 border-t pt-4 lg:col-span-1 lg:mt-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+          {myPending > 0 ? (
+            <>
+              <div className="label-caps">À valider par vous</div>
+              <div className="stat mt-1 text-2xl sm:text-5xl">{myPending}</div>
+              <Link to="/validation" className="mt-1 inline-block text-sm text-primary underline-offset-4 hover:underline">Ouvrir la file de validation</Link>
+            </>
+          ) : latest && (
+            <>
+              <div className="label-caps">Résultat net · {fmtMonth(latest)}</div>
+              <Money value={net} currency="USD" className={cn("stat mt-1 block text-2xl sm:text-5xl", net < 0n && "text-destructive")} />
+              <div className="mt-1 text-sm text-muted-foreground">équivalent USD</div>
+            </>
+          )}
+        </div>
       </div>
 
-      <Card title="Effectifs et offrande moyenne par personne" icon={Users}>
-        <DataTable loading={loading} emptyIcon={Users} empty="Aucun comptage validé" rows={(d?.attendance ?? []).map((a, i) => ({ ...a, id: String(i) }))} columns={[
-          { header: "Date", cell: (a) => fmtDate(a.service_date) }, { header: "Culte", cell: (a) => a.service_type }, { header: "Présents", align: "right", cell: (a) => a.total },
-          { header: "Offrande / personne", align: "right", cell: (a) => (a.total ? usd(Math.round(Number(a.offering_usd) / a.total)) : "—") },
-        ]} />
-      </Card>
+      <div className="grid gap-x-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div>
+          <Section title="Recettes et dépenses par mois" actions="équivalent USD">
+            {loading ? <Skeleton className="mt-4 h-44 w-full" /> : months.length === 0 ? <p className="py-6 text-sm text-foreground/80">Aucune écriture validée pour l'instant.</p> : <div className="pt-4"><MonthlyChart months={months} flow={flow} /></div>}
+          </Section>
+
+          <Section title="Soldes par compte">
+            <DataTable loading={loading} empty="Aucun compte configuré" rows={balances} columns={[
+              { header: "Compte", cell: (b) => <><div className="font-medium">{b.name}</div><div className="text-xs text-muted-foreground">{label(b.type)}</div></> },
+              { header: "Solde", align: "right", cell: (b) => <Money value={b.balance} currency={b.currency} /> },
+            ]} />
+          </Section>
+        </div>
+
+        <div>
+          <Section title="Principales catégories" actions="vs période précédente">
+            <DataTable loading={loading} empty="Aucune écriture validée sur la période" rows={(d?.topCategories ?? []).map((c) => ({ ...c, id: c.kind + c.name }))} columns={[
+              { header: "Catégorie", cell: (c) => <><div>{c.name}</div><div className="text-xs text-muted-foreground">{label(c.kind)}</div></> },
+              { header: "Total", align: "right", cell: (c) => <Money value={c.total_usd} currency="USD" /> },
+              { header: "Tendance", align: "right", cell: (c) => {
+                const r = Number(c.recent_half_usd), p = Number(c.previous_half_usd);
+                if (!p) return <span className="text-muted-foreground">—</span>;
+                const up = r >= p;
+                return <span className={cn("tabular-nums", up ? "text-success" : "text-destructive")}>{up ? "▲ +" : "▼ "}{Math.round(((r - p) / p) * 100)} %</span>;
+              } },
+            ]} />
+          </Section>
+
+          <Section title="Promesses de dons">
+            <DataTable loading={loading} empty="Aucune promesse en cours" rows={d?.pledges ?? []} columns={[
+              { header: "Donateur", cell: (p) => p.donor_name ?? "—" },
+              { header: "Reste à recevoir", align: "right", cell: (p) => <Money value={BigInt(p.promised) - BigInt(p.received)} currency={p.currency} /> },
+            ]} />
+          </Section>
+
+          <Section title="Dépenses à venir">
+            <DataTable loading={loading} empty="Aucun engagement à venir" rows={d?.obligations ?? []} columns={[
+              { header: "Bénéficiaire", cell: (o) => <><div>{o.payee}</div><div className="text-xs text-muted-foreground">{fmtDate(o.due_date)}</div></> },
+              { header: "Montant", align: "right", cell: (o) => <Money value={o.amount} currency={o.currency} /> },
+            ]} />
+          </Section>
+
+          <Section title="Effectifs" actions="offrande moyenne par personne">
+            <DataTable loading={loading} empty="Aucun comptage validé" rows={(d?.attendance ?? []).map((a, i) => ({ ...a, id: String(i) }))} columns={[
+              { header: "Culte", cell: (a) => <><div>{a.service_type}</div><div className="text-xs text-muted-foreground">{fmtDate(a.service_date)}</div></> },
+              { header: "Présents", align: "right", cell: (a) => a.total },
+              { header: "Par personne", align: "right", cell: (a) => (a.total ? <Money value={Math.round(Number(a.offering_usd) / a.total)} currency="USD" /> : "—") },
+            ]} />
+          </Section>
+        </div>
+      </div>
     </>
   );
 }

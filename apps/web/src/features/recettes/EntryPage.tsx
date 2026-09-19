@@ -1,16 +1,16 @@
 import { useState } from "react";
+import { FormDate, FormSelect, dateLimits } from "@/components/form-controls";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowDownToLine, ArrowUpFromLine, ListChecks, Paperclip, Pencil, Plus, Receipt, Send, Trash2, Undo2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CheckCheck, ListChecks, Paperclip, Pencil, Plus, Receipt, Send, Trash2, Undo2, X } from "lucide-react";
 import { parseAmount, isEditable, type Currency } from "@church/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { NativeSelect } from "@/components/ui/native-select";
-import { ActionButton, Banner, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
+import { ActionButton, Banner, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, ReasonDialog, StatusBadge } from "@/components/common";
 import { useApi } from "../../core/api";
 import { amountField, requiredSelect } from "../../core/forms";
 import { fmtDate, money, today } from "../../core/format";
@@ -63,6 +63,21 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
     onSuccess: () => setNotice("Pièce jointe ajoutée."),
   });
 
+  // Same selection + batch flow as "À valider": Trésorier acts on Soumise, Pasteur on Validée 1; never on own entries.
+  const step1 = s.can("transaction.validate1");
+  const step2 = s.can("transaction.validate2");
+  const canValidate = (step1 || step2) && !s.consolidated;
+  const stepFor = (t: Tx) => (t.status === "soumise" && step1 ? "validate1" : t.status === "validee1" && step2 ? "validate2" : null);
+  const selectable = (t: Tx) => t.enteredBy !== s.me.user.id && stepFor(t) !== null;
+  const [selected, setSelected] = useState(new Set<string>());
+  const [rejecting, setRejecting] = useState(false);
+  const [results, setResults] = useState<Array<{ id: string; ok: boolean; error?: string }>>([]);
+  const batch = useMutation({
+    mutationFn: ({ action, comment }: { action: string; comment?: string }) => api.post<{ results: typeof results }>(`/transactions/batch/${action}`, { ids: [...selected], comment }),
+    onSuccess: (r) => { setResults(r.results); setSelected(new Set()); invalidate(); },
+  });
+  const failed = results.filter((r) => !r.ok);
+
   const title = isRecette ? "Recettes" : "Dépenses";
   return (
     <>
@@ -75,10 +90,21 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
       </PageHeader>
       {notice && <Banner>{notice}</Banner>}
 
-      <Card title="Écritures" icon={ListChecks}>
-        <ErrorNote error={act.error ?? attach.error} />
+      <Card title="Écritures" icon={ListChecks} actions={canValidate && (
+        <span className="inline-flex items-center gap-1.5">
+          <ActionButton variant="destructive" icon={X} pending={batch.isPending && batch.variables?.action === "reject"} disabled={!selected.size || batch.isPending} onClick={() => setRejecting(true)}>Rejeter ({selected.size})</ActionButton>
+          <ActionButton icon={CheckCheck} pending={batch.isPending && batch.variables?.action !== "reject"} disabled={!selected.size || batch.isPending} onClick={() => {
+            const chosen = (list.data ?? []).filter((t) => selected.has(t.id));
+            new Set(chosen.map(stepFor)).forEach((action) => action && batch.mutate({ action }));
+          }}>Valider ({selected.size})</ActionButton>
+        </span>
+      )}>
+        <ErrorNote error={act.error ?? attach.error ?? batch.error} />
+        {failed.length > 0 && <ErrorNote error={new Error(`${failed.length} échec(s) : ${[...new Set(failed.map((f) => f.error))].join(" ; ")}`)} />}
         <DataTable<Tx>
-          rows={list.data ?? []} loading={list.isLoading} emptyIcon={isRecette ? ArrowDownToLine : ArrowUpFromLine}
+          rows={list.data ?? []} loading={list.isLoading}
+          select={canValidate ? { selected, onChange: setSelected, selectable } : undefined}
+          emptyIcon={isRecette ? ArrowDownToLine : ArrowUpFromLine}
           empty={isRecette ? "Aucune recette enregistrée" : "Aucune dépense enregistrée"}
           columns={[
             { header: "Réf.", cell: (t) => t.reference },
@@ -111,6 +137,9 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
         />
       </Card>
 
+      <ReasonDialog open={rejecting} onOpenChange={setRejecting} title={`Rejeter ${selected.size} écriture(s)`} label="Motif du rejet (envoyé au caissier)" confirmLabel="Rejeter" destructive
+        onConfirm={(comment) => batch.mutate({ action: "reject", comment })} />
+
       <ModalForm
         open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}
         title={dialog?.editing ? `Modifier ${dialog.editing.reference}` : isRecette ? "Nouvelle recette" : "Nouvelle dépense"}
@@ -133,7 +162,7 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
   const members = useQuery({ queryKey: useScopedKey("members"), queryFn: () => api.get<{ id: string; fullName: string }[]>("/engagements/members"), enabled: isRecette });
   const pledges = useQuery({ queryKey: useScopedKey("pledges"), queryFn: () => api.get<{ id: string; donorName?: string; categoryId: string }[]>("/engagements/pledges"), enabled: isRecette });
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, control, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: editing
       ? {
@@ -176,22 +205,22 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
   return (
     <form onSubmit={submit(false)} noValidate>
       <FormGrid>
-        <Field label="Date" error={errors.date?.message}><Input type="date" {...register("date")} /></Field>
+        <Field label="Date" error={errors.date?.message}><FormDate control={control} name="date" {...dateLimits.past()} /></Field>
         <Field label="Compte" error={errors.accountId?.message}>
-          <NativeSelect {...register("accountId")}><option value="">—</option>{accounts.data?.filter((a) => a.active).map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}</NativeSelect>
+          <FormSelect control={control} name="accountId" options={[{ value: "", label: "—" }, ...(accounts.data?.filter((a) => a.active) ?? []).map((a) => ({ value: a.id, label: <>{a.name} ({a.currency})</> }))]} />
         </Field>
         <Field label="Catégorie" error={errors.categoryId?.message}>
-          <NativeSelect {...register("categoryId")}><option value="">—</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.group ? `${c.group} · ` : ""}{c.name}</option>)}</NativeSelect>
+          <FormSelect control={control} name="categoryId" options={[{ value: "", label: "—" }, ...(categories.data ?? []).map((c) => ({ value: c.id, label: <>{c.group ? `${c.group} · ` : ""}{c.name}</> }))]} />
         </Field>
         <Field label={`Montant ${account ? `(${account.currency})` : ""}`} error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
         {category?.requiresDepartment && (
-          <Field label="Département"><NativeSelect {...register("departmentId")}><option value="">—</option>{departments.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</NativeSelect></Field>
+          <Field label="Département"><FormSelect control={control} name="departmentId" options={[{ value: "", label: "—" }, ...(departments.data ?? []).map((d) => ({ value: d.id, label: d.name }))]} /></Field>
         )}
         {isRecette && category?.name === "Dîme" && (
-          <Field label="Membre (optionnel)"><NativeSelect {...register("memberId")}><option value="">—</option>{members.data?.map((m) => <option key={m.id} value={m.id}>{m.fullName}</option>)}</NativeSelect></Field>
+          <Field label="Membre (optionnel)"><FormSelect control={control} name="memberId" options={[{ value: "", label: "—" }, ...(members.data ?? []).map((m) => ({ value: m.id, label: m.fullName }))]} /></Field>
         )}
         {isRecette && !!pledges.data?.length && (
-          <Field label="Promesse liée (optionnel)"><NativeSelect {...register("pledgeId")}><option value="">—</option>{pledges.data.map((p) => <option key={p.id} value={p.id}>{p.donorName ?? p.id.slice(0, 8)}</option>)}</NativeSelect></Field>
+          <Field label="Promesse liée (optionnel)"><FormSelect control={control} name="pledgeId" options={[{ value: "", label: "—" }, ...(pledges.data ?? []).map((p) => ({ value: p.id, label: p.donorName ?? p.id.slice(0, 8) }))]} /></Field>
         )}
         {!isRecette && <Field label="Bénéficiaire"><Input {...register("beneficiary")} /></Field>}
         <Field label={isRecette ? "Référence" : "N° pièce (facture, reçu, bon de sortie)"}><Input {...register("documentNumber")} /></Field>

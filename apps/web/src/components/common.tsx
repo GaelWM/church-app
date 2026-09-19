@@ -1,9 +1,10 @@
-import { useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
-import { AlertCircle, Check, CircleCheck, CircleX, Clock, FilePen, Inbox, Info, Save, ShieldCheck } from "lucide-react";
+import { useMemo, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { AlertCircle, ArrowDown, ArrowUp, Check, ChevronsUpDown, CircleCheck, CircleX, Clock, FilePen, Inbox, Info, Save, ShieldCheck } from "lucide-react";
+import { flexRender, getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { parseAmount, STATUS_LABELS, type TxStatus } from "@church/shared";
+import { parseAmount, STATUS_LABELS, type Currency, type TxStatus } from "@church/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,32 +18,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { moneyParts } from "../core/format";
 
 type Icon = ComponentType<{ className?: string }>;
 
-const STATUS_STYLE: Record<TxStatus, string> = {
-  brouillon: "",
-  soumise: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
-  validee1: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
-  validee: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
-  rejetee: "",
+const STATUS_DOT: Record<TxStatus, string> = {
+  brouillon: "bg-muted-foreground/60", soumise: "bg-warning", validee1: "bg-warning", validee: "bg-success", rejetee: "bg-destructive",
 };
 
 export const STATUS_ICON: Record<TxStatus, ComponentType<{ className?: string }>> = {
   brouillon: FilePen, soumise: Clock, validee1: ShieldCheck, validee: CircleCheck, rejetee: CircleX,
 };
 
+function Dot({ className }: { className: string }) {
+  return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", className)} />;
+}
+
 export function StatusBadge({ status }: { status: TxStatus }) {
-  const Icon = STATUS_ICON[status];
-  return (
-    <Badge variant={status === "rejetee" ? "destructive" : "secondary"} className={STATUS_STYLE[status]}>
-      <Icon />{STATUS_LABELS[status]}
-    </Badge>
-  );
+  return <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"><Dot className={STATUS_DOT[status]} />{STATUS_LABELS[status]}</span>;
 }
 
 export function Provisional() {
-  return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300" title="Inclut des écritures non validées"><Clock />provisoire</Badge>;
+  return <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 align-middle text-xs font-medium" title="Inclut des écritures non validées"><Dot className="bg-warning" />provisoire</span>;
 }
 
 /** Accepts "1 250,50" and reports minor units (or null while invalid). */
@@ -73,12 +70,12 @@ export function Field({ label, error, children }: { label: string; error?: strin
   );
 }
 
-export function Card({ title, icon: Icon, children, actions, className }: { title?: string; icon?: Icon; children: ReactNode; actions?: ReactNode; className?: string }) {
+export function Card({ title, children, actions, className }: { title?: string; /** @deprecated cards no longer show icons */ icon?: Icon; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
     <ShadCard className={cn("mb-4", className)}>
       {(title || actions) && (
         <CardHeader>
-          {title && <CardTitle className="flex items-center gap-2">{Icon && <Icon className="size-4 text-muted-foreground" />}{title}</CardTitle>}
+          {title && <CardTitle>{title}</CardTitle>}
           {actions && <CardAction>{actions}</CardAction>}
         </CardHeader>
       )}
@@ -87,52 +84,109 @@ export function Card({ title, icon: Icon, children, actions, className }: { titl
   );
 }
 
-export interface Column<T> { header: string; cell: (row: T) => ReactNode; align?: "right" }
-export function EmptyState({ icon: Icon = Inbox, title, description }: { icon?: Icon; title: string; description?: string }) {
+export interface Column<T> {
+  header: string; cell: (row: T) => ReactNode; align?: "right";
+  /** Makes the column sortable; return the value to order by (nullish values sort last). */
+  sort?: (row: T) => string | number | bigint | null | undefined;
+}
+export function EmptyState({ title, description }: { icon?: Icon; title: string; description?: string }) {
   return (
-    <Empty className="border border-dashed p-6">
-      <EmptyHeader>
-        <EmptyMedia variant="icon"><Icon /></EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description && <EmptyDescription>{description}</EmptyDescription>}
-      </EmptyHeader>
-    </Empty>
+    <div className="py-6 text-sm">
+      <p className="text-foreground/80">{title}</p>
+      {description && <p className="mt-0.5 text-muted-foreground">{description}</p>}
+    </div>
   );
 }
 
-/** Table with a skeleton while loading and an empty state when there is nothing to show. */
-export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", emptyIcon }: {
+type SortValue = string | number | bigint | null | undefined;
+const compareValues = (x: SortValue, y: SortValue) => {
+  if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1; // nullish last (ascending)
+  if (typeof x === "string" && typeof y === "string") return x.localeCompare(y, "fr", { numeric: true });
+  return x < y ? -1 : x > y ? 1 : 0;
+};
+
+/** shadcn Data Table: Table primitives driven by TanStack Table (sortable headers, optional pagination), with a skeleton while loading and an empty state. */
+export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", pageSize }: {
   rows: T[]; columns: Column<T>[]; empty?: string; emptyIcon?: Icon; loading?: boolean;
-  select?: { selected: Set<string>; onChange: (s: Set<string>) => void };
+  /** Paginate at this many rows (the pager only appears when there is more than one page). */
+  pageSize?: number;
+  select?: { selected: Set<string>; onChange: (s: Set<string>) => void; /** Rows that cannot be selected get a disabled checkbox. */ selectable?: (r: T) => boolean };
 }) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const defs = useMemo<ColumnDef<T>[]>(() => columns.map((c, i) => ({
+    id: c.header || `col-${i}`, // action columns have an empty header, and TanStack needs a non-empty id
+    header: c.header,
+    accessorFn: (r: T) => c.sort?.(r),
+    cell: ({ row }) => c.cell(row.original),
+    enableSorting: !!c.sort,
+    sortingFn: (a, b, id) => compareValues(a.getValue<SortValue>(id), b.getValue<SortValue>(id)),
+    sortUndefined: "last",
+    meta: { align: c.align },
+  })), [columns]);
+  const table = useReactTable({
+    data: rows, columns: defs, state: { sorting }, onSortingChange: setSorting,
+    getRowId: (r, i) => r.id ?? String(i),
+    getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(),
+    ...(pageSize ? { getPaginationRowModel: getPaginationRowModel(), initialState: { pagination: { pageSize } } } : {}),
+  });
+
   if (loading) return <TableSkeleton columns={columns.length + (select ? 1 : 0)} />;
-  if (!rows.length) return <EmptyState icon={emptyIcon} title={empty} />;
-  const all = !!select && rows.every((r) => select.selected.has(r.id!));
-  const align = (a?: "right") => (a === "right" ? "text-right tabular-nums" : "");
+  if (!rows.length) return <EmptyState title={empty} />;
+  const pickable = select?.selectable ? rows.filter(select.selectable) : rows;
+  const all = !!select && pickable.length > 0 && pickable.every((r) => select.selected.has(r.id!));
+  const right = (m: unknown) => (m as { align?: "right" } | undefined)?.align === "right";
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {select && <TableHead className="w-8"><Checkbox checked={all} onCheckedChange={(v) => select.onChange(new Set(v ? rows.map((r) => r.id!) : []))} aria-label="Tout sélectionner" /></TableHead>}
-          {columns.map((c) => <TableHead key={c.header} className={align(c.align)}>{c.header}</TableHead>)}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((r, i) => (
-          <TableRow key={r.id ?? i}>
-            {select && (
-              <TableCell>
-                <Checkbox
-                  checked={select.selected.has(r.id!)} aria-label="Sélectionner"
-                  onCheckedChange={(v) => { const n = new Set(select.selected); v ? n.add(r.id!) : n.delete(r.id!); select.onChange(n); }}
-                />
-              </TableCell>
-            )}
-            {columns.map((c) => <TableCell key={c.header} className={cn("whitespace-normal", align(c.align))}>{c.cell(r)}</TableCell>)}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((hg) => (
+            <TableRow key={hg.id}>
+              {select && <TableHead className="w-8"><Checkbox checked={all} onCheckedChange={(v) => select.onChange(new Set(v ? pickable.map((r) => r.id!) : []))} disabled={!pickable.length} aria-label="Tout sélectionner" /></TableHead>}
+              {hg.headers.map((h) => {
+                const dir = h.column.getIsSorted();
+                const r = right(h.column.columnDef.meta);
+                return (
+                  <TableHead key={h.id} className={cn(r && "text-right")} aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+                    {h.column.getCanSort() ? (
+                      <button type="button" onClick={h.column.getToggleSortingHandler()} className={cn("-mx-1 inline-flex items-center gap-1 rounded px-1 uppercase tracking-[0.08em] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none", r && "flex-row-reverse", dir && "text-foreground")}>
+                        {flexRender(h.column.columnDef.header, h.getContext())}
+                        {dir === "asc" ? <ArrowUp className="size-3" /> : dir === "desc" ? <ArrowDown className="size-3" /> : <ChevronsUpDown className="size-3 opacity-40" />}
+                      </button>
+                    ) : flexRender(h.column.columnDef.header, h.getContext())}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow key={row.id}>
+              {select && (
+                <TableCell>
+                  <Checkbox
+                    checked={select.selected.has(row.original.id!)} aria-label="Sélectionner" disabled={select.selectable ? !select.selectable(row.original) : false}
+                    onCheckedChange={(v) => { const n = new Set(select.selected); v ? n.add(row.original.id!) : n.delete(row.original.id!); select.onChange(n); }}
+                  />
+                </TableCell>
+              )}
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className={cn("whitespace-normal", right(cell.column.columnDef.meta) && "text-right tabular-nums")}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {pageSize && table.getPageCount() > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-3 text-sm text-muted-foreground">
+          <span>{rows.length} lignes · page {table.getState().pagination.pageIndex + 1} sur {table.getPageCount()}</span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>Précédent</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Suivant</Button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -155,11 +209,11 @@ export function PageSpinner({ label = "Chargement…" }: { label?: string }) {
 }
 
 /** Headline number with an icon; shows a skeleton while the value loads. */
-export function StatCard({ label, icon: Icon, value, loading, hint }: { label: string; icon: Icon; value?: ReactNode; loading?: boolean; hint?: ReactNode }) {
+export function StatCard({ label, value, loading, hint }: { label: string; icon?: Icon; value?: ReactNode; loading?: boolean; hint?: ReactNode }) {
   return (
     <ShadCard>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Icon className="size-4" />{label}</CardTitle>
+        <CardTitle className="label-caps font-sans">{label}</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? <Skeleton className="h-8 w-40" /> : <div className="stat">{value}</div>}
@@ -189,16 +243,35 @@ export function ErrorNote({ error }: { error: unknown }) {
 }
 
 export function Banner({ children, icon: Icon = Info }: { children: ReactNode; icon?: Icon }) {
-  return <Alert className="mb-3 border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><Icon /><AlertDescription className="text-inherit">{children}</AlertDescription></Alert>;
+  return <Alert className="mb-3 border-warning/40 bg-warning/10 text-foreground"><Icon /><AlertDescription className="text-inherit">{children}</AlertDescription></Alert>;
 }
 
-export function PageHeader({ title, icon: Icon, children }: { title: ReactNode; icon?: Icon; children?: ReactNode }) {
+export function PageHeader({ title, children }: { title: ReactNode; /** @deprecated page titles no longer show icons */ icon?: Icon; children?: ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-xl font-semibold">{Icon && <Icon className="size-5 text-muted-foreground" />}{title}</h2>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <h1 className="text-2xl font-semibold">{title}</h1>
       {children}
     </div>
   );
+}
+
+/** Ungrouped content block: heading over a hairline, no box. Use instead of Card for dashboard-style pages. */
+export function Section({ title, actions, children, className }: { title: string; actions?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section className={cn("mb-8", className)}>
+      <div className="mb-1 flex items-baseline justify-between gap-3 border-b pb-2">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {actions && <div className="text-sm text-muted-foreground">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Amount with its currency code set smaller and muted, so the figure leads. */
+export function Money({ value, currency, className }: { value: string | bigint | number; currency: Currency; className?: string }) {
+  const { amount, code } = moneyParts(value, currency);
+  return <span className={cn("whitespace-nowrap tabular-nums", className)}>{amount}<span className="ml-1 text-[0.6em] font-medium tracking-wide text-muted-foreground">{code}</span></span>;
 }
 
 /** Dialog shell for forms. The form component goes inside, so it remounts (fresh state) on every open. */

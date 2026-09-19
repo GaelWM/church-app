@@ -63,8 +63,8 @@
       "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_ME" }],
       "send_email": [{ "name": "EMAIL" }],
       "vars": {
-        "AUTH0_DOMAIN": "REPLACE_ME.auth0.com",
-        "AUTH0_AUDIENCE": "https://church-accounting/api",
+        "AUTH0_DOMAIN": "church-app.us.auth0.com",
+        "AUTH0_AUDIENCE": "https://church-app.us.auth0.com/api/v2/",
         "APP_URL": "https://REPLACE_ME.org",
         "MAIL_FROM": "no-reply@REPLACE_ME.org"
       }

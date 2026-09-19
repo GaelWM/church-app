@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FormDate, FormSelect, OptionSelect, dateLimits } from "@/components/form-controls";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +8,6 @@ import { FileText, HandCoins, Handshake, ReceiptText, Users, Plus } from "lucide
 import { CURRENCIES, parseAmount, type Currency } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader } from "@/components/common";
 import { useApi } from "../../core/api";
 import { amountField, requiredSelect } from "../../core/forms";
@@ -68,10 +68,7 @@ export function EngagementsPage() {
           { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
           { header: "Montant", align: "right", cell: (x) => money(x.amountMinor, x.currency) }, { header: "Statut", cell: (x) => (x.status === "paid" ? "Payé" : "Ouvert") },
           { header: "", cell: (x) => canEnter && x.status === "open" && (
-            <NativeSelect size="sm" defaultValue="" onChange={(e) => e.target.value && markPaid.mutate({ id: x.id, transactionId: e.target.value })}>
-              <option value="">Lier à la dépense payée…</option>
-              {depenseTx.data?.filter((t) => t.currency === x.currency).map((t) => <option key={t.id} value={t.id}>{t.reference} · {money(t.amountMinor, t.currency)}</option>)}
-            </NativeSelect>) },
+            <OptionSelect size="sm" className="w-auto min-w-48" value="" placeholder="Lier à la dépense payée…" aria-label="Lier à la dépense payée" onValueChange={(v) => v && markPaid.mutate({ id: x.id, transactionId: v })} options={(depenseTx.data ?? []).filter((t) => t.currency === x.currency).map((t) => ({ value: t.id, label: `${t.reference} · ${money(t.amountMinor, t.currency)}` }))} />) },
         ]} />
       </Card>
 
@@ -106,7 +103,7 @@ function PledgeForm({ onClose }: { onClose: () => void }) {
   const invalidate = useInvalidateLedger();
   const recettes = useCategories("recette");
   const members = useQuery({ queryKey: useScopedKey("members"), queryFn: () => api.get<Member[]>("/engagements/members") });
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof pledgeSchema>>({ resolver: zodResolver(pledgeSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "" } });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof pledgeSchema>>({ resolver: zodResolver(pledgeSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "" } });
   const add = useMutation({
     mutationFn: (v: z.infer<typeof pledgeSchema>) => api.post("/engagements/pledges", { donorName: v.donorName || undefined, memberId: v.memberId || undefined, categoryId: v.categoryId, currency: v.currency, amountMinor: parseAmount(v.amount).toString(), dueDate: v.dueDate || undefined }),
     onSuccess: () => { invalidate(); onClose(); },
@@ -114,12 +111,12 @@ function PledgeForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
       <FormGrid>
-        <Field label="Membre"><NativeSelect {...register("memberId")}><option value="">—</option>{members.data?.map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</NativeSelect></Field>
+        <Field label="Membre"><FormSelect control={control} name="memberId" options={[{ value: "", label: "—" }, ...(members.data ?? []).map((x) => ({ value: x.id, label: x.fullName }))]} /></Field>
         <Field label="ou nom du donateur / partenaire" error={errors.donorName?.message}><Input {...register("donorName")} /></Field>
-        <Field label="Catégorie" error={errors.categoryId?.message}><NativeSelect {...register("categoryId")}><option value="">—</option>{recettes.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
-        <Field label="Devise"><NativeSelect {...register("currency")}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</NativeSelect></Field>
+        <Field label="Catégorie" error={errors.categoryId?.message}><FormSelect control={control} name="categoryId" options={[{ value: "", label: "—" }, ...(recettes.data ?? []).map((x) => ({ value: x.id, label: x.name }))]} /></Field>
+        <Field label="Devise"><FormSelect control={control} name="currency" options={[...(CURRENCIES ?? []).map((c) => ({ value: c, label: c }))]} /></Field>
         <Field label="Montant promis" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
-        <Field label="Échéance"><Input type="date" {...register("dueDate")} /></Field>
+        <Field label="Échéance"><FormDate control={control} name="dueDate" {...dateLimits.due()} /></Field>
       </FormGrid>
       <div className="mt-3"><ErrorNote error={add.error} /></div>
       <FormFooter pending={add.isPending} onCancel={onClose} />
@@ -133,7 +130,7 @@ function CommitmentForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
   const depenses = useCategories("depense");
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof commitmentSchema>>({ resolver: zodResolver(commitmentSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "", payee: "" } });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof commitmentSchema>>({ resolver: zodResolver(commitmentSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "", payee: "" } });
   const add = useMutation({
     mutationFn: (v: z.infer<typeof commitmentSchema>) => api.post("/engagements/commitments", { payee: v.payee, categoryId: v.categoryId, currency: v.currency, amountMinor: parseAmount(v.amount).toString(), dueDate: v.dueDate || undefined }),
     onSuccess: () => { invalidate(); onClose(); },
@@ -142,10 +139,10 @@ function CommitmentForm({ onClose }: { onClose: () => void }) {
     <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
       <FormGrid>
         <Field label="Bénéficiaire" error={errors.payee?.message}><Input {...register("payee")} /></Field>
-        <Field label="Catégorie" error={errors.categoryId?.message}><NativeSelect {...register("categoryId")}><option value="">—</option>{depenses.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
-        <Field label="Devise"><NativeSelect {...register("currency")}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</NativeSelect></Field>
+        <Field label="Catégorie" error={errors.categoryId?.message}><FormSelect control={control} name="categoryId" options={[{ value: "", label: "—" }, ...(depenses.data ?? []).map((x) => ({ value: x.id, label: x.name }))]} /></Field>
+        <Field label="Devise"><FormSelect control={control} name="currency" options={[...(CURRENCIES ?? []).map((c) => ({ value: c, label: c }))]} /></Field>
         <Field label="Montant" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
-        <Field label="Échéance"><Input type="date" {...register("dueDate")} /></Field>
+        <Field label="Échéance"><FormDate control={control} name="dueDate" {...dateLimits.due()} /></Field>
       </FormGrid>
       <div className="mt-3"><ErrorNote error={add.error} /></div>
       <FormFooter pending={add.isPending} onCancel={onClose} />
@@ -158,7 +155,7 @@ const memberSchema = z.object({ fullName: z.string().trim().min(1, "Nom requis")
 function MemberForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof memberSchema>>({ resolver: zodResolver(memberSchema) });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof memberSchema>>({ resolver: zodResolver(memberSchema) });
   const add = useMutation({ mutationFn: (v: z.infer<typeof memberSchema>) => api.post("/engagements/members", { fullName: v.fullName, phone: v.phone || undefined }), onSuccess: () => { invalidate(); onClose(); } });
   return (
     <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate className="space-y-3">

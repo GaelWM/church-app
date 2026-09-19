@@ -19,6 +19,13 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "/engagements": Handshake, "/effectifs": Users, "/validation": CheckCheck, "/configuration": Settings,
 };
 
+const NAV_GROUPS: { title?: string; items: string[] }[] = [
+  { items: ["/"] },
+  { title: "Saisie", items: ["/recettes", "/depenses", "/engagements", "/effectifs"] },
+  { title: "Contrôle", items: ["/banques", "/journal", "/validation"] },
+  { title: "Administration", items: ["/configuration"] },
+];
+
 function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   const s = useSession();
   const visible: Record<string, boolean> = {
@@ -26,23 +33,48 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
     "/configuration": s.roles.includes("administrateur") || s.can("audit.view"),
   };
   return (
-    <nav className="flex flex-col gap-1" aria-label="Navigation principale">
-      {Object.entries(PAGE_TITLES).filter(([to]) => visible[to] ?? true).map(([to, label]) => {
-        const Icon = ICONS[to]!;
+    <nav className="flex flex-col gap-5" aria-label="Navigation principale">
+      {NAV_GROUPS.map((g) => {
+        const items = g.items.filter((to) => visible[to] ?? true);
+        if (!items.length) return null;
         return (
-          <NavLink
-            key={to} to={to} end={to === "/"} onClick={onNavigate}
-            className={({ isActive }) => cn("flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground")}
-          >
-            <Icon className="size-4" />{label}
-          </NavLink>
+          <div key={g.title ?? "top"}>
+            {g.title && <div className="label-caps mb-1 px-3">{g.title}</div>}
+            <div className="flex flex-col">
+              {items.map((to) => {
+                const Icon = ICONS[to]!;
+                return (
+                  <NavLink
+                    key={to} to={to} end={to === "/"} onClick={onNavigate}
+                    className={({ isActive }) => cn("flex items-center gap-2.5 border-l-2 border-transparent px-3 py-1.5 text-sm text-sidebar-foreground/70 transition-colors hover:text-sidebar-foreground", isActive && "border-primary font-medium text-sidebar-foreground")}
+                  >
+                    <Icon className="size-4 opacity-70" />{PAGE_TITLES[to]}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>
   );
 }
 
-const Brand = () => <div className="px-3 pb-3 text-sm font-semibold">Comptabilité de l'église</div>;
+function Brand() {
+  const s = useSession();
+  const name = s.parishId === "all" ? "Toutes les paroisses" : s.parish?.name ?? "Paroisse";
+  return (
+    <div className="mb-6 flex items-center gap-2.5 px-3 pt-1">
+      <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"><path d="M12 3v18M6 9h12" /></svg>
+      </span>
+      <div className="min-w-0 leading-tight">
+        <div className="truncate text-sm font-semibold">{name}</div>
+        <div className="label-caps">Comptabilité</div>
+      </div>
+    </div>
+  );
+}
 
 export function Layout() {
   const s = useSession();
@@ -63,7 +95,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-      <aside className="no-print sticky top-0 hidden h-screen flex-col border-r bg-sidebar p-3 text-sidebar-foreground md:flex">
+      <aside className="no-print sticky top-0 hidden h-screen flex-col border-r bg-sidebar px-2 py-4 text-sidebar-foreground md:flex">
         <Brand />
         <SideNav />
       </aside>
@@ -114,7 +146,7 @@ export function Layout() {
           </DropdownMenu>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
+        <main className="mx-auto w-full max-w-7xl p-4 md:p-8">
           {!online && <Banner icon={WifiOff}>Hors ligne — les nouvelles écritures sont gardées en brouillon sur cet appareil.</Banner>}
           {s.consolidated && <Banner icon={Eye}>Vue consolidée : lecture seule.</Banner>}
           <Outlet />

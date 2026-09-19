@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FormDate, dateLimits } from "@/components/form-controls";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -64,7 +65,7 @@ export function EffectifsPage() {
 function AttendanceForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<Values, unknown, z.output<typeof schema>>({
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<Values, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema), defaultValues: { serviceDate: today(), serviceType: "Culte du dimanche", hommes: 0, femmes: 0, jeunes: 0, enfants: 0, visiteurs: 0 },
   });
   const total = GROUPS.reduce((n, g) => n + (Number(watch(g)) || 0), 0);
@@ -72,7 +73,7 @@ function AttendanceForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
       <FormGrid>
-        <Field label="Date" error={errors.serviceDate?.message}><Input type="date" {...register("serviceDate")} /></Field>
+        <Field label="Date" error={errors.serviceDate?.message}><FormDate control={control} name="serviceDate" {...dateLimits.past()} /></Field>
         <Field label="Culte" error={errors.serviceType?.message}><Input {...register("serviceType")} /></Field>
         {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)} error={errors[g]?.message}><Input type="number" min={0} {...register(g)} /></Field>)}
         <p className="muted self-end pb-2">Total : <b>{total}</b> présents</p>

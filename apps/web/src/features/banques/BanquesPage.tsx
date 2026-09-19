@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FormDate, FormSelect, OptionSelect, dateLimits } from "@/components/form-controls";
 import { useSearchParams } from "react-router-dom";
 import { TAB_ICONS, TAB_LABELS } from "../../app/routes";
 import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
@@ -18,7 +19,6 @@ import { ActionButton, Card, DataTable, EmptyState, ErrorNote, Field, FormFooter
 import { ArrowLeftRight, CalendarCheck, CalendarX2, Check, Landmark, RotateCcw, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -102,7 +102,7 @@ function OperationForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
   const accounts = useAccounts();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<OpValues>({
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<OpValues>({
     resolver: zodResolver(opSchema), defaultValues: { type: "versement", date: today(), amount: "" },
   });
   const type = watch("type");
@@ -115,18 +115,18 @@ function OperationForm({ onClose }: { onClose: () => void }) {
     }),
     onSuccess: () => { invalidate(); onClose(); },
   });
-  const opts = <>{accounts.data?.filter((a) => a.active).map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}</>;
+  const opts = [{ value: "", label: "—" }, ...(accounts.data ?? []).filter((a) => a.active).map((a) => ({ value: a.id, label: `${a.name} (${a.currency})` }))];
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate>
       <FormGrid>
-        <Field label="Opération"><NativeSelect {...register("type")}>{OPS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</NativeSelect></Field>
-        <Field label="Date" error={errors.date?.message}><Input type="date" {...register("date")} /></Field>
+        <Field label="Opération"><FormSelect control={control} name="type" options={OPS.map(([k, l]) => ({ value: k, label: l }))} /></Field>
+        <Field label="Date" error={errors.date?.message}><FormDate control={control} name="date" {...dateLimits.past()} /></Field>
         {single ? (
-          <Field label="Compte" error={errors.accountId?.message}><NativeSelect {...register("accountId")}><option value="">—</option>{opts}</NativeSelect></Field>
+          <Field label="Compte" error={errors.accountId?.message}><FormSelect control={control} name="accountId" options={opts} /></Field>
         ) : (
           <>
-            <Field label="De" error={errors.fromAccountId?.message}><NativeSelect {...register("fromAccountId")}><option value="">—</option>{opts}</NativeSelect></Field>
-            <Field label="Vers" error={errors.toAccountId?.message}><NativeSelect {...register("toAccountId")}><option value="">—</option>{opts}</NativeSelect></Field>
+            <Field label="De" error={errors.fromAccountId?.message}><FormSelect control={control} name="fromAccountId" options={opts} /></Field>
+            <Field label="Vers" error={errors.toAccountId?.message}><FormSelect control={control} name="toAccountId" options={opts} /></Field>
           </>
         )}
         <Field label="Montant (devise du compte source)" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
@@ -160,7 +160,7 @@ function Reconciliation() {
     <>
       <Card title="Rapprochement bancaire" icon={Scale}>
         <div className="form-grid">
-          <Field label="Compte bancaire"><NativeSelect value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">—</option>{accounts.data?.filter((a) => a.type !== "caisse").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></Field>
+          <Field label="Compte bancaire"><OptionSelect value={accountId} onValueChange={setAccountId} options={[{ value: "", label: "—" }, ...(accounts.data ?? []).filter((a) => a.type !== "caisse").map((a) => ({ value: a.id, label: a.name }))]} /></Field>
           <Field label="Mois du relevé"><Input type="month" value={ym} onChange={(e) => setYm(e.target.value)} /></Field>
         </div>
       </Card>
@@ -200,7 +200,7 @@ function ClosePeriodForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
   const now = new Date();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof periodSchema>>({
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof periodSchema>>({
     resolver: zodResolver(periodSchema), defaultValues: { ym: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` },
   });
   const close = useMutation({

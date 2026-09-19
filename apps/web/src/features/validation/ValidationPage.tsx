@@ -10,7 +10,6 @@ import { ValidationFlowButton, countByStatus } from "./ValidationFlow";
 import { ActionButton, Card, DataTable, ErrorNote, StatusBadge, PageHeader, ReasonDialog } from "@/components/common";
 import { CheckCheck, ListChecks, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
 
 /** "À valider" inbox: Trésorier sees Soumise (step 1), Pasteur sees Validée 1 (step 2). Batch actions. */

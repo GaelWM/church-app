@@ -3,6 +3,24 @@ import { ACCOUNT_TYPES, CURRENCIES, ROLES } from "./enums";
 
 const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/**
+ * ISO date that must be a real calendar day inside [now - pastYears, now + futureDays]. The windows are wider than the
+ * date pickers in the web app (which enforce the tighter, per-field UX limits), so the UI can never produce a rejected date;
+ * the extra day of future slack covers users whose local date is already "tomorrow" in UTC.
+ */
+const boundedDate = (pastYears: number, futureDays: number) => isoDate.refine((s) => {
+  const t = Date.parse(`${s}T00:00:00Z`);
+  if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== s) return false; // e.g. 2026-02-31
+  const now = Date.now();
+  return t >= now - pastYears * 366 * 86_400_000 && t <= now + futureDays * 86_400_000;
+}, "Date hors de la période autorisée");
+/** Something that already happened (entry, bank operation, service). */
+export const pastDate = boundedDate(10, 1);
+/** A due date: may be overdue, can be planned a few years ahead. */
+export const dueDate = boundedDate(2, 6 * 366);
+/** A rate or setting taking effect: can be backdated, scheduled about a month ahead. */
+export const effectiveDate = boundedDate(10, 32);
 const amountMinor = z.coerce.bigint().positive();
 
 export const parishSchema = z.object({
@@ -28,7 +46,7 @@ export const accountSchema = z.object({
 
 export const exchangeRateSchema = z.object({
   rateCdfPerUsd: z.string().regex(/^\d+(\.\d{1,4})?$/),
-  effectiveFrom: isoDate,
+  effectiveFrom: effectiveDate,
 });
 
 export const transactionInputSchema = z.object({
@@ -36,7 +54,7 @@ export const transactionInputSchema = z.object({
   kind: z.enum(["recette", "depense"]),
   accountId: uuid,
   categoryId: uuid,
-  date: isoDate,
+  date: pastDate,
   amountMinor,
   reference: z.string().optional(),
   description: z.string().optional(),

@@ -6,15 +6,13 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { BookOpen, FileSpreadsheet, FileText, History, ListFilter } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { STATUS_LABELS, type TxStatus } from "@church/shared";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, DataTable, Field, StatusBadge, PageHeader, STATUS_ICON } from "../../components/common";
+import { DateRangePicker, OptionSelect, dateLimits } from "../../components/form-controls";
+import { DataTable, Field, Money, StatusBadge, PageHeader } from "../../components/common";
 import { exportExcel, exportPdf } from "./export";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
 
 type Row = Tx & { running_balance: string; category_id?: string; account_id?: string; amount_minor?: string; entered_by?: string };
 
@@ -28,7 +26,6 @@ export function JournalPage() {
   const rows = useQuery({ queryKey: useScopedKey("journal", f), queryFn: () => api.get<Row[]>("/transactions/journal", f) });
   const [open, setOpen] = useState<string | null>(null);
   const detail = useQuery({ queryKey: ["tx", open], queryFn: () => api.get<any>(`/transactions/${open}`), enabled: !!open });
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   // Raw SQL rows use snake_case.
   const norm = (r: Row) => ({ ...r, accountId: r.accountId ?? r.account_id!, categoryId: r.categoryId ?? r.category_id ?? null, amountMinor: r.amountMinor ?? r.amount_minor! });
   const data = (rows.data ?? []).map(norm);
@@ -39,7 +36,7 @@ export function JournalPage() {
 
   return (
     <>
-      <PageHeader title="Journal des transactions" icon={BookOpen}>
+      <PageHeader title="Journal des transactions">
         {s.can("report.export") && (
           <span className="actions no-print">
             <Button size="sm" variant="outline" onClick={() => exportExcel("journal", head, table())}><FileSpreadsheet />Excel</Button>
@@ -47,42 +44,38 @@ export function JournalPage() {
           </span>
         )}
       </PageHeader>
-      <Card title="Filtres" icon={ListFilter}>
-        <div className="form-grid">
-          <Field label="Du"><Input type="date" value={f.from} onChange={set("from")} /></Field>
-          <Field label="Au"><Input type="date" value={f.to} onChange={set("to")} /></Field>
-          <Field label="Compte"><NativeSelect value={f.accountId} onChange={set("accountId")}><option value="">Tous</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></Field>
-          <Field label="Catégorie"><NativeSelect value={f.categoryId} onChange={set("categoryId")}><option value="">Toutes</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</NativeSelect></Field>
-          <Field label="Devise"><NativeSelect value={f.currency} onChange={set("currency")}><option value="">Toutes</option><option>CDF</option><option>USD</option></NativeSelect></Field>
-          <Field label="Statut"><NativeSelect value={f.status} onChange={set("status")}><option value="">Tous</option>{["brouillon", "soumise", "validee1", "validee", "rejetee"].map((x) => <option key={x}>{x}</option>)}</NativeSelect></Field>
-        </div>
-      </Card>
-      <Card>
+      <div className="no-print mb-5 flex flex-wrap items-end gap-x-3 gap-y-3 border-b pb-5 ">
+        <Field label="Période"><DateRangePicker from={f.from} to={f.to} onChange={(r) => setF({ ...f, ...r })} max={dateLimits.past().max} /></Field>
+        <Field label="Compte"><OptionSelect className="min-w-36" value={f.accountId} onValueChange={(v) => setF({ ...f, accountId: v })} placeholder="Tous" options={[{ value: "", label: "Tous" }, ...(accounts.data ?? []).map((a) => ({ value: a.id, label: a.name }))]} /></Field>
+        <Field label="Catégorie"><OptionSelect className="min-w-40" value={f.categoryId} onValueChange={(v) => setF({ ...f, categoryId: v })} placeholder="Toutes" options={[{ value: "", label: "Toutes" }, ...(categories.data ?? []).map((c) => ({ value: c.id, label: c.name }))]} /></Field>
+        <Field label="Devise"><OptionSelect className="min-w-28" value={f.currency} onValueChange={(v) => setF({ ...f, currency: v })} placeholder="Toutes" options={[{ value: "", label: "Toutes" }, { value: "CDF", label: "CDF" }, { value: "USD", label: "USD" }]} /></Field>
+        <Field label="Statut"><OptionSelect className="min-w-32" value={f.status} onValueChange={(v) => setF({ ...f, status: v })} placeholder="Tous" options={[{ value: "", label: "Tous" }, ...(["brouillon", "soumise", "validee1", "validee", "rejetee"] as TxStatus[]).map((x) => ({ value: x, label: STATUS_LABELS[x] }))]} /></Field>
+        {Object.values(f).some(Boolean) && <Button type="button" variant="ghost" size="sm" onClick={() => setF({ from: "", to: "", accountId: "", categoryId: "", currency: "", status: "" })}>Réinitialiser</Button>}
+      </div>
+      <div>
         <DataTable
-          rows={data} loading={rows.isLoading} emptyIcon={BookOpen} empty="Aucune écriture pour ces filtres"
+          rows={data} loading={rows.isLoading} pageSize={25} empty="Aucune écriture pour ces filtres"
           columns={[
-            { header: "Date", cell: (r) => fmtDate(r.date) },
-            { header: "Réf.", cell: (r) => <a href="#" onClick={(e) => { e.preventDefault(); setOpen(open === r.id ? null : r.id); }}>{r.reference}</a> },
-            { header: "Compte", cell: (r) => acct(r.accountId) },
-            { header: "Catégorie", cell: (r) => cat(r.categoryId) },
-            { header: "Entrée", align: "right", cell: (r) => (r.direction === "in" ? money(r.amountMinor, r.currency as Currency) : "") },
-            { header: "Sortie", align: "right", cell: (r) => (r.direction === "out" ? money(r.amountMinor, r.currency as Currency) : "") },
-            { header: "Solde", align: "right", cell: (r) => money(r.running_balance, r.currency as Currency) },
+            { header: "Date", sort: (r) => r.date, cell: (r) => fmtDate(r.date) },
+            { header: "Réf.", sort: (r) => r.reference, cell: (r) => <a href="#" className="font-medium text-primary underline-offset-4 hover:underline" onClick={(e) => { e.preventDefault(); setOpen(open === r.id ? null : r.id); }}>{r.reference}</a> },
+            { header: "Compte", sort: (r) => acct(r.accountId), cell: (r) => acct(r.accountId) },
+            { header: "Catégorie", sort: (r) => cat(r.categoryId), cell: (r) => cat(r.categoryId) },
+            { header: "Entrée", align: "right", cell: (r) => (r.direction === "in" ? <Money value={r.amountMinor} currency={r.currency as Currency} /> : "") },
+            { header: "Sortie", align: "right", cell: (r) => (r.direction === "out" ? <Money value={r.amountMinor} currency={r.currency as Currency} /> : "") },
+            { header: "Solde", align: "right", cell: (r) => <Money value={r.running_balance} currency={r.currency as Currency} /> },
             { header: "Statut", cell: (r) => <StatusBadge status={r.status} /> },
           ]}
         />
         {open && (
           <div className="mt-3 rounded-lg border p-3">
-            <h3 className="mb-2 flex items-center gap-2 font-medium"><History className="size-4 text-muted-foreground" />Historique de validation{detail.data ? ` — ${detail.data.reference}` : ""}</h3>
+            <h3 className="mb-2 font-medium">Historique de validation{detail.data ? ` — ${detail.data.reference}` : ""}</h3>
             {detail.isLoading ? (
               <div role="status" aria-label="Chargement" className="space-y-2"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-1/2" /><Skeleton className="h-5 w-3/5" /></div>
             ) : (
               <ol className="space-y-2">
                 {detail.data?.events.map((e: any) => {
-                  const Icon = STATUS_ICON[e.toStatus as TxStatus];
                   return (
                     <li key={e.id} className="flex items-start gap-2 text-sm">
-                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <div>
                         <b>{STATUS_LABELS[e.toStatus as TxStatus] ?? e.toStatus}</b> — {e.actorName}
                         <span className="text-muted-foreground"> · {new Date(e.at).toLocaleString("fr-FR")}</span>
@@ -95,7 +88,7 @@ export function JournalPage() {
             )}
           </div>
         )}
-      </Card>
+      </div>
     </>
   );
 }

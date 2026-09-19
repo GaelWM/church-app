@@ -4,7 +4,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { attendanceRecords, commitments, members, pledges } from "@church/db";
-import { CURRENCIES, transition, WorkflowError, type TxAction, type TxStatus } from "@church/shared";
+import { CURRENCIES, dueDate, pastDate, transition, WorkflowError, type TxAction, type TxStatus } from "@church/shared";
 import type { AppEnv } from "../env";
 import { parishScope, requireParish, requirePerm } from "../middleware/auth";
 import { audit } from "../services/audit";
@@ -12,7 +12,7 @@ import { run } from "../services/run";
 
 const uuid = z.string().uuid();
 const amount = z.coerce.bigint().positive();
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const date = pastDate;
 
 export const engagementRoutes = new Hono<AppEnv>()
   .use(parishScope)
@@ -29,7 +29,7 @@ export const engagementRoutes = new Hono<AppEnv>()
   // Promesses de dons
   .get("/pledges", async (c) => c.json(await run(c, (tx) => tx.select().from(pledges))))
   .post("/pledges", requirePerm("transaction.create"), zValidator("json", z.object({
-    memberId: uuid.optional(), donorName: z.string().optional(), categoryId: uuid, currency: z.enum(CURRENCIES), amountMinor: amount, dueDate: date.optional(),
+    memberId: uuid.optional(), donorName: z.string().optional(), categoryId: uuid, currency: z.enum(CURRENCIES), amountMinor: amount, dueDate: dueDate.optional(),
   })), async (c) =>
     c.json(await run(c, async (tx) => {
       const b = c.req.valid("json");
@@ -42,7 +42,7 @@ export const engagementRoutes = new Hono<AppEnv>()
   // Engagements de dépenses
   .get("/commitments", async (c) => c.json(await run(c, (tx) => tx.select().from(commitments))))
   .post("/commitments", requirePerm("transaction.create"), zValidator("json", z.object({
-    categoryId: uuid, payee: z.string().min(1), currency: z.enum(CURRENCIES), amountMinor: amount, dueDate: date.optional(),
+    categoryId: uuid, payee: z.string().min(1), currency: z.enum(CURRENCIES), amountMinor: amount, dueDate: dueDate.optional(),
   })), async (c) =>
     c.json(await run(c, async (tx) => {
       const [m] = await tx.insert(commitments).values({ parishId: requireParish(c), ...c.req.valid("json") }).returning();

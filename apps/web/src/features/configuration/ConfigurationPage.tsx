@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FormDate, FormSelect, OptionSelect, dateLimits } from "@/components/form-controls";
 import { useSearchParams } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +10,6 @@ import { ACCOUNT_TYPES, CURRENCIES, findRoleConflict, ROLE_LABELS, ROLES, type R
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActionButton, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader } from "@/components/common";
 import { TAB_ICONS, TAB_LABELS } from "../../app/routes";
@@ -75,7 +75,7 @@ function Users() {
         <ErrorNote error={toggle.error ?? addRole.error} />
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           Ajouter un profil dans :
-          <NativeSelect size="sm" value={target} onChange={(e) => setTarget(e.target.value)}>{adminParishes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</NativeSelect>
+          <OptionSelect size="sm" className="w-auto min-w-40" value={target} onValueChange={setTarget} options={adminParishes.map((p) => ({ value: p.id, label: p.name }))} />
         </div>
         <DataTable rows={users.data ?? []} loading={users.isLoading} emptyIcon={UsersIcon} empty="Aucun utilisateur" columns={[
           { header: "Nom", cell: (u) => u.fullName }, { header: "Email", cell: (u) => u.email },
@@ -83,9 +83,7 @@ function Users() {
           { header: "Actif", cell: (u) => (u.active ? "Oui" : "Non") },
           { header: "", cell: (u) => (
             <span className="actions">
-              <NativeSelect size="sm" defaultValue="" onChange={(e) => { if (e.target.value) { addRole.mutate({ user: u, parishId: target, role: e.target.value as Role }); e.target.value = ""; } }}>
-                <option value="">+ profil…</option>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-              </NativeSelect>
+              <OptionSelect size="sm" className="w-auto min-w-32" value="" placeholder="+ profil…" aria-label="Ajouter un profil" onValueChange={(v) => v && addRole.mutate({ user: u, parishId: target, role: v as Role })} options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))} />
               {u.id !== s.me.user.id && <ActionButton size="sm" variant={u.active ? "destructive" : "outline"} icon={u.active ? Ban : RotateCcw} pending={toggle.isPending && toggle.variables?.id === u.id} onClick={() => toggle.mutate({ id: u.id, state: u.active ? "deactivate" : "activate" })}>{u.active ? "Désactiver" : "Réactiver"}</ActionButton>}
             </span>) },
         ]} />
@@ -111,8 +109,8 @@ function UserForm({ parishes, onClose, onDone }: { parishes: { id: string; name:
       <FormGrid>
         <Field label="Nom complet" error={errors.fullName?.message}><Input {...register("fullName")} /></Field>
         <Field label="Email" error={errors.email?.message}><Input type="email" {...register("email")} /></Field>
-        <Field label="Paroisse" error={errors.parishId?.message}><NativeSelect {...register("parishId")}>{parishes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</NativeSelect></Field>
-        <Field label="Profil"><NativeSelect {...register("role")}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</NativeSelect></Field>
+        <Field label="Paroisse" error={errors.parishId?.message}><FormSelect control={control} name="parishId" options={[...(parishes ?? []).map((p) => ({ value: p.id, label: p.name }))]} /></Field>
+        <Field label="Profil"><FormSelect control={control} name="role" options={[...(ROLES ?? []).map((r) => ({ value: r, label: ROLE_LABELS[r] }))]} /></Field>
         <Controller control={control} name="consolidated" render={({ field }) => (
           <label className="col-span-full flex items-center gap-2 text-sm"><Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} /> Vue consolidée (toutes les paroisses, lecture seule)</label>
         )} />
@@ -141,7 +139,7 @@ function Parishes() {
 
 function ParishForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof parishSchema>>({ resolver: zodResolver(parishSchema) });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof parishSchema>>({ resolver: zodResolver(parishSchema) });
   const create = useMutation({ mutationFn: (v: z.infer<typeof parishSchema>) => api.post("/parishes", { name: v.name, code: v.code.toUpperCase(), city: v.city || undefined }), onSuccess: () => location.reload() });
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate className="space-y-3">
@@ -176,7 +174,7 @@ function AccountForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const s = useSession();
   const invalidate = useInvalidateLedger();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<z.infer<typeof accountSchema>>({ resolver: zodResolver(accountSchema), defaultValues: { type: "caisse", currency: "CDF", name: "" } });
+  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<z.infer<typeof accountSchema>>({ resolver: zodResolver(accountSchema), defaultValues: { type: "caisse", currency: "CDF", name: "" } });
   const create = useMutation({
     mutationFn: (v: z.infer<typeof accountSchema>) => api.post("/accounts", { parishId: s.parishId, type: v.type, currency: v.currency, name: v.name, bankName: v.bankName || undefined, number: v.number || undefined }),
     onSuccess: () => { invalidate(); onClose(); },
@@ -184,8 +182,8 @@ function AccountForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate>
       <FormGrid>
-        <Field label="Type"><NativeSelect {...register("type")}>{ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}</NativeSelect></Field>
-        <Field label="Devise"><NativeSelect {...register("currency")}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</NativeSelect></Field>
+        <Field label="Type"><FormSelect control={control} name="type" options={[...(ACCOUNT_TYPES ?? []).map((t) => ({ value: t, label: TYPE_LABEL[t] }))]} /></Field>
+        <Field label="Devise"><FormSelect control={control} name="currency" options={[...(CURRENCIES ?? []).map((c) => ({ value: c, label: c }))]} /></Field>
         <div className="col-span-full"><Field label="Nom" error={errors.name?.message}><Input placeholder="Caisse CDF, M-Pesa…" {...register("name")} /></Field></div>
         {watch("type") !== "caisse" && (
           <>
@@ -223,11 +221,11 @@ function Categories() {
 function CategoryForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof categorySchema>>({ resolver: zodResolver(categorySchema), defaultValues: { kind: "recette", name: "" } });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof categorySchema>>({ resolver: zodResolver(categorySchema), defaultValues: { kind: "recette", name: "" } });
   const create = useMutation({ mutationFn: (v: z.infer<typeof categorySchema>) => api.post("/categories", { kind: v.kind, name: v.name, group: v.group || undefined }), onSuccess: () => { invalidate(); onClose(); } });
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate className="space-y-3">
-      <Field label="Type"><NativeSelect {...register("kind")}><option value="recette">Recette</option><option value="depense">Dépense</option><option value="banque">Banque</option></NativeSelect></Field>
+      <Field label="Type"><FormSelect control={control} name="kind" options={[{ value: "recette", label: "Recette" }, { value: "depense", label: "Dépense" }, { value: "banque", label: "Banque" }]} /></Field>
       <Field label="Nom" error={errors.name?.message}><Input autoFocus {...register("name")} /></Field>
       <Field label="Groupe"><Input {...register("group")} /></Field>
       <ErrorNote error={create.error} />
@@ -256,12 +254,12 @@ function Rate() {
 
 function RateForm({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const api = useApi();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof rateSchema>>({ resolver: zodResolver(rateSchema), defaultValues: { rate: "", from: today() } });
+  const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof rateSchema>>({ resolver: zodResolver(rateSchema), defaultValues: { rate: "", from: today() } });
   const create = useMutation({ mutationFn: (v: z.infer<typeof rateSchema>) => api.post("/exchange-rates", { rateCdfPerUsd: v.rate.replace(",", "."), effectiveFrom: v.from }), onSuccess: () => { onDone(); onClose(); } });
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate className="space-y-3">
       <Field label="1 USD = … CDF" error={errors.rate?.message}><Input autoFocus inputMode="decimal" {...register("rate")} /></Field>
-      <Field label="Effectif à partir du" error={errors.from?.message}><Input type="date" {...register("from")} /></Field>
+      <Field label="Effectif à partir du" error={errors.from?.message}><FormDate control={control} name="from" {...dateLimits.effective()} /></Field>
       <ErrorNote error={create.error} />
       <FormFooter pending={create.isPending} onCancel={onClose} />
     </form>
