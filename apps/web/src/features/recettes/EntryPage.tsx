@@ -3,13 +3,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Paperclip, Plus } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ListChecks, Paperclip, Pencil, Plus, Receipt, Send, Trash2, Undo2 } from "lucide-react";
 import { parseAmount, isEditable, type Currency } from "@church/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Banner, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
+import { ActionButton, Banner, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
 import { useApi } from "../../core/api";
 import { amountField, requiredSelect } from "../../core/forms";
 import { fmtDate, money, today } from "../../core/format";
@@ -18,6 +19,7 @@ import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from ".
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
 import { receiptPdf } from "./receipt";
+import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
 
 const schema = z.object({
   date: z.string().min(1, "Date requise"),
@@ -55,6 +57,7 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
       action === "delete" ? api.del(`/transactions/${id}`) : api.post(`/transactions/${id}/${action}`, body),
     onSuccess: invalidate,
   });
+  const busy = (id: string, action: string) => act.isPending && act.variables?.id === id && act.variables?.action === action;
   const attach = useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }) => api.upload(`/attachments/transaction/${id}`, file),
     onSuccess: () => setNotice("Pièce jointe ajoutée."),
@@ -63,18 +66,20 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
   const title = isRecette ? "Recettes" : "Dépenses";
   return (
     <>
-      <PageHeader title={title}>
+      <PageHeader title={title} icon={isRecette ? ArrowDownToLine : ArrowUpFromLine}>
         <span className="flex items-center gap-2">
           {!online && <Badge variant="secondary">Hors ligne</Badge>}
+          <ValidationFlowButton counts={countByStatus(list.data)} />
           {canEnter && <Button onClick={() => setDialog({ editing: null })}><Plus /> {isRecette ? "Nouvelle recette" : "Nouvelle dépense"}</Button>}
         </span>
       </PageHeader>
       {notice && <Banner>{notice}</Banner>}
 
-      <Card title="Écritures">
+      <Card title="Écritures" icon={ListChecks}>
         <ErrorNote error={act.error ?? attach.error} />
         <DataTable<Tx>
-          rows={list.data ?? []}
+          rows={list.data ?? []} loading={list.isLoading} emptyIcon={isRecette ? ArrowDownToLine : ArrowUpFromLine}
+          empty={isRecette ? "Aucune recette enregistrée" : "Aucune dépense enregistrée"}
           columns={[
             { header: "Réf.", cell: (t) => t.reference },
             { header: "Date", cell: (t) => fmtDate(t.date) },
@@ -87,17 +92,17 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
                 const mine = t.enteredBy === s.me.user.id;
                 return (
                   <span className="actions">
-                    {canEnter && mine && isEditable(t.status) && <Button size="sm" variant="outline" onClick={() => setDialog({ editing: t })}>Modifier</Button>}
-                    {canEnter && mine && isEditable(t.status) && <Button size="sm" onClick={() => act.mutate({ id: t.id, action: "submit" })}>Soumettre</Button>}
-                    {canEnter && mine && t.status === "brouillon" && <Button size="sm" variant="destructive" onClick={() => act.mutate({ id: t.id, action: "delete" })}>Supprimer</Button>}
-                    {canEnter && t.status === "validee" && !t.reversesId && <ReasonButton danger label="Contre-passer" onConfirm={(comment) => act.mutate({ id: t.id, action: "reverse", body: { comment } })} />}
+                    {canEnter && mine && isEditable(t.status) && <Button size="sm" variant="outline" onClick={() => setDialog({ editing: t })}><Pencil />Modifier</Button>}
+                    {canEnter && mine && isEditable(t.status) && <ActionButton size="sm" icon={Send} pending={busy(t.id, "submit")} onClick={() => act.mutate({ id: t.id, action: "submit" })}>Soumettre</ActionButton>}
+                    {canEnter && mine && t.status === "brouillon" && <ActionButton size="sm" variant="destructive" icon={Trash2} pending={busy(t.id, "delete")} onClick={() => act.mutate({ id: t.id, action: "delete" })}>Supprimer</ActionButton>}
+                    {canEnter && t.status === "validee" && !t.reversesId && <ReasonButton danger icon={Undo2} label="Contre-passer" onConfirm={(comment) => act.mutate({ id: t.id, action: "reverse", body: { comment } })} />}
                     {canEnter && mine && isEditable(t.status) && (
                       <label className="cursor-pointer" title="Ajouter une pièce jointe">
                         <input type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => e.target.files?.[0] && attach.mutate({ id: t.id, file: e.target.files[0] })} />
-                        <Badge variant="outline"><Paperclip /> Pièce</Badge>
+                        <Badge variant="outline">{attach.isPending && attach.variables?.id === t.id ? <Spinner /> : <Paperclip />} Pièce</Badge>
                       </label>
                     )}
-                    {isRecette && t.status === "validee" && <Button size="sm" variant="outline" onClick={() => receiptPdf(t, s.parish?.name ?? "", catName(t.categoryId), acctName(t.accountId))}>Reçu</Button>}
+                    {isRecette && t.status === "validee" && <Button size="sm" variant="outline" onClick={() => receiptPdf(t, s.parish?.name ?? "", catName(t.categoryId), acctName(t.accountId))}><Receipt />Reçu</Button>}
                   </span>
                 );
               },
@@ -194,8 +199,8 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
       </FormGrid>
       <div className="mt-3"><ErrorNote error={save.error} /></div>
       <FormFooter
-        pending={save.isPending} onCancel={onClose} submitLabel={editing ? "Enregistrer" : "Enregistrer"}
-        extra={!editing && <Button type="button" variant="outline" disabled={save.isPending} onClick={submit(true)}>Enregistrer et ajouter une autre</Button>}
+        pending={save.isPending && !save.variables?.another} onCancel={onClose}
+        extra={!editing && <ActionButton type="button" variant="outline" icon={Plus} pending={save.isPending && save.variables?.another} disabled={save.isPending} onClick={submit(true)}>Enregistrer et ajouter une autre</ActionButton>}
       />
     </form>
   );

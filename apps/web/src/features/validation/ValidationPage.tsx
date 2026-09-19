@@ -6,8 +6,9 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, StatusBadge, PageHeader, ReasonDialog } from "@/components/common";
-import { Button } from "@/components/ui/button";
+import { ValidationFlowButton, countByStatus } from "./ValidationFlow";
+import { ActionButton, Card, DataTable, ErrorNote, StatusBadge, PageHeader, ReasonDialog } from "@/components/common";
+import { CheckCheck, ListChecks, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,21 +40,21 @@ export function ValidationPage() {
 
   return (
     <>
-      <PageHeader title="À valider" />
-      <Card title={`${rows.length} écriture(s) en attente`} actions={
+      <PageHeader title="À valider" icon={CheckCheck}><ValidationFlowButton counts={countByStatus(list.data)} /></PageHeader>
+      <Card title={list.isLoading ? "Écritures en attente" : `${rows.length} écriture(s) en attente`} icon={ListChecks} actions={
         <span className="inline-flex items-center gap-1.5">
-          <Button variant="destructive" disabled={!selected.size || batch.isPending} onClick={() => setRejecting(true)}>Rejeter ({selected.size})</Button>
-          <Button disabled={!selected.size || batch.isPending} onClick={() => {
+          <ActionButton variant="destructive" icon={X} pending={batch.isPending && batch.variables?.action === "reject"} disabled={!selected.size || batch.isPending} onClick={() => setRejecting(true)}>Rejeter ({selected.size})</ActionButton>
+          <ActionButton icon={CheckCheck} pending={batch.isPending && batch.variables?.action !== "reject"} disabled={!selected.size || batch.isPending} onClick={() => {
             const chosen = rows.filter((t) => selected.has(t.id));
             // A mixed selection is split by state so each row gets the right step.
             new Set(chosen.map(stepFor)).forEach((action) => batch.mutate({ action }));
-          }}>Valider ({selected.size})</Button>
+          }}>Valider ({selected.size})</ActionButton>
         </span>
       }>
         <ErrorNote error={batch.error} />
-        {failed.length > 0 && <p className="text-sm text-destructive">{failed.length} échec(s) : {[...new Set(failed.map((f) => f.error))].join(" ; ")}</p>}
+        {failed.length > 0 && <ErrorNote error={new Error(`${failed.length} échec(s) : ${[...new Set(failed.map((f) => f.error))].join(" ; ")}`)} />}
         <DataTable<Tx>
-          rows={rows}
+          rows={rows} loading={list.isLoading} emptyIcon={CheckCheck} empty="Rien à valider pour le moment"
           select={{ selected, onChange: setSelected }}
           columns={[
             { header: "Réf.", cell: (t) => t.reference },

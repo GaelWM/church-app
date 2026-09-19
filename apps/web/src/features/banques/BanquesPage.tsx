@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { TAB_LABELS } from "../../app/routes";
+import { TAB_ICONS, TAB_LABELS } from "../../app/routes";
+import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,7 +14,8 @@ import { fmtDate, money, today } from "../../core/format";
 import { useAccounts, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, StatusBadge } from "@/components/common";
+import { ActionButton, Card, DataTable, EmptyState, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, StatusBadge, TableSkeleton } from "@/components/common";
+import { ArrowLeftRight, CalendarCheck, CalendarX2, Check, Landmark, RotateCcw, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -37,10 +39,10 @@ export function BanquesPage() {
   useEffect(() => { if (params.get("tab") !== tab) setParams({ tab }, { replace: true }); }, [tab, params]);
   return (
     <>
-      <PageHeader title="Banques" />
+      <PageHeader title="Banques" icon={Landmark} />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="mb-4">
         <TabsList variant="line">
-          {TAB_KEYS.map((t) => <TabsTrigger key={t} value={t}>{TAB_LABELS["/banques"]![t]}</TabsTrigger>)}
+          {TAB_KEYS.map((t) => { const Icon = TAB_ICONS["/banques"]![t]!; return <TabsTrigger key={t} value={t}><Icon />{TAB_LABELS["/banques"]![t]}</TabsTrigger>; })}
         </TabsList>
       </Tabs>
       {tab === "operations" && <Operations canEnter={s.can("transaction.create") && !s.consolidated} />}
@@ -76,9 +78,12 @@ function Operations({ canEnter }: { canEnter: boolean }) {
   const rows = useQuery({ queryKey: useScopedKey("bank-tx"), queryFn: () => api.get<Tx[]>("/transactions", { kind: "transfert,change" }) });
   return (
     <>
-      {canEnter && <div className="mb-3"><Button onClick={() => setOpen(true)}><Plus /> Nouvelle opération</Button></div>}
-      <Card title="Virements et changes">
-        <DataTable<Tx> rows={rows.data ?? []} columns={[
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {canEnter && <Button onClick={() => setOpen(true)}><Plus /> Nouvelle opération</Button>}
+        <ValidationFlowButton counts={countByStatus(rows.data)} />
+      </div>
+      <Card title="Virements et changes" icon={ArrowLeftRight}>
+        <DataTable<Tx> rows={rows.data ?? []} loading={rows.isLoading} emptyIcon={ArrowLeftRight} empty="Aucune opération bancaire" columns={[
           { header: "Réf.", cell: (t) => t.reference }, { header: "Date", cell: (t) => fmtDate(t.date) },
           { header: "Type", cell: (t) => t.kind }, { header: "Compte", cell: (t) => accounts.data?.find((a) => a.id === t.accountId)?.name ?? "" },
           { header: "Sens", cell: (t) => (t.direction === "in" ? "Entrée" : "Sortie") },
@@ -149,20 +154,22 @@ function Reconciliation() {
   const cols = (matched: boolean) => [
     { header: "Date", cell: (t: Tx) => fmtDate(t.date) }, { header: "Réf.", cell: (t: Tx) => t.reference }, { header: "Description", cell: (t: Tx) => t.description ?? "" },
     { header: "Montant", align: "right" as const, cell: (t: Tx) => (t.direction === "in" ? "" : "-") + money(t.amountMinor, t.currency as Currency) },
-    { header: "", cell: (t: Tx) => canTick && <Button size="sm" variant="outline" onClick={() => toggle.mutate({ ids: [t.id], matched: !matched })}>{matched ? "Décocher" : "Pointer"}</Button> },
+    { header: "", cell: (t: Tx) => canTick && <ActionButton size="sm" variant="outline" icon={matched ? RotateCcw : Check} pending={toggle.isPending && toggle.variables?.ids[0] === t.id} onClick={() => toggle.mutate({ ids: [t.id], matched: !matched })}>{matched ? "Décocher" : "Pointer"}</ActionButton> },
   ];
   return (
     <>
-      <Card>
+      <Card title="Rapprochement bancaire" icon={Scale}>
         <div className="form-grid">
           <Field label="Compte bancaire"><NativeSelect value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">—</option>{accounts.data?.filter((a) => a.type !== "caisse").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></Field>
           <Field label="Mois du relevé"><Input type="month" value={ym} onChange={(e) => setYm(e.target.value)} /></Field>
         </div>
       </Card>
+      {!accountId && <EmptyState icon={Landmark} title="Choisissez un compte bancaire" description="Les lignes validées du mois s'afficheront ici pour être pointées." />}
+      {accountId && data.isLoading && <Card><TableSkeleton columns={5} /></Card>}
       {data.data && (
         <>
-          <Card title={`Non rapprochées (${data.data.unmatched.length})`}><DataTable<Tx> rows={data.data.unmatched} columns={cols(false)} /></Card>
-          <Card title={`Rapprochées (${data.data.matched.length})`}><DataTable<Tx> rows={data.data.matched} columns={cols(true)} /></Card>
+          <Card title={`Non rapprochées (${data.data.unmatched.length})`} icon={CalendarX2}><DataTable<Tx> rows={data.data.unmatched} columns={cols(false)} empty="Tout est rapproché" emptyIcon={Check} /></Card>
+          <Card title={`Rapprochées (${data.data.matched.length})`} icon={Check}><DataTable<Tx> rows={data.data.matched} columns={cols(true)} empty="Aucune ligne pointée" /></Card>
         </>
       )}
     </>
@@ -178,9 +185,9 @@ function Periods() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      {s.can("period.close") && !s.consolidated && <div className="mb-3"><Button onClick={() => setOpen(true)}>Clôturer un mois</Button></div>}
-      <Card title="Périodes clôturées">
-        <DataTable rows={(periods.data ?? []).filter((p) => p.closedAt)} columns={[{ header: "Période", cell: (p) => `${String(p.month).padStart(2, "0")}/${p.year}` }, { header: "Clôturée le", cell: (p) => fmtDate(p.closedAt) }]} />
+      {s.can("period.close") && !s.consolidated && <div className="mb-3"><Button onClick={() => setOpen(true)}><CalendarCheck /> Clôturer un mois</Button></div>}
+      <Card title="Périodes clôturées" icon={CalendarCheck}>
+        <DataTable loading={periods.isLoading} emptyIcon={CalendarCheck} empty="Aucun mois clôturé" rows={(periods.data ?? []).filter((p) => p.closedAt)} columns={[{ header: "Période", cell: (p) => `${String(p.month).padStart(2, "0")}/${p.year}` }, { header: "Clôturée le", cell: (p) => fmtDate(p.closedAt) }]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Clôturer un mois" description="Après la clôture, aucune écriture ne peut être ajoutée à ce mois. Toutes les écritures du mois doivent être validées ou rejetées.">
         <ClosePeriodForm onClose={() => setOpen(false)} />

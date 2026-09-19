@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { LogIn, ServerCrash, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageSpinner } from "@/components/common";
 import { Auth0Provider, useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 
 export interface AuthApi { getToken: () => Promise<string>; logout: () => void }
@@ -16,19 +18,21 @@ const DEV_KEY = "church.devUser";
 
 function DevAuth({ children }: { children: ReactNode }) {
   const [user, setUser] = useState(() => localStorage.getItem(DEV_KEY));
-  const [users, setUsers] = useState<{ auth0Id: string; fullName: string; email: string }[]>([]);
+  const [users, setUsers] = useState<{ auth0Id: string; fullName: string; email: string }[] | null>(null);
   useEffect(() => {
     if (!user) fetch("/api/dev/users").then((r) => r.json()).then(setUsers).catch(() => setUsers([]));
   }, [user]);
+  if (!user && users === null) return <PageSpinner label="Chargement des utilisateurs de démonstration…" />;
   if (!user) {
     return (
-      <div className="center"><div>
+      <div className="center"><div className="flex flex-col items-center">
+        <LogIn className="mb-3 size-10 text-muted-foreground" />
         <h2 className="mb-1 text-xl font-semibold">Connexion (mode développement)</h2>
         <p className="mb-4 text-muted-foreground">Choisissez un utilisateur de démonstration.</p>
         <div className="flex flex-wrap justify-center gap-2">
-          {users.map((u) => <Button key={u.auth0Id} variant="outline" onClick={() => { localStorage.setItem(DEV_KEY, u.auth0Id); setUser(u.auth0Id); }}>{u.fullName}</Button>)}
+          {users!.map((u) => <Button key={u.auth0Id} variant="outline" onClick={() => { localStorage.setItem(DEV_KEY, u.auth0Id); setUser(u.auth0Id); }}><UserRound />{u.fullName}</Button>)}
         </div>
-        {!users.length && <p className="mt-3 text-destructive">Aucun utilisateur : lancez « bun run dev:setup » puis démarrez l'API.</p>}
+        {!users!.length && <p className="mt-3 flex items-center gap-2 text-destructive"><ServerCrash className="size-4" />Aucun utilisateur : lancez « bun run dev:setup » puis démarrez l'API.</p>}
       </div></div>
     );
   }
@@ -47,7 +51,7 @@ function Auth0Bridge({ children }: { children: ReactNode }) {
   };
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
-const ProtectedBridge = withAuthenticationRequired(Auth0Bridge, { onRedirecting: () => <div className="center"><p className="text-muted-foreground">Redirection vers la connexion…</p></div> });
+const ProtectedBridge = withAuthenticationRequired(Auth0Bridge, { onRedirecting: () => <PageSpinner label="Redirection vers la connexion…" /> });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   if (DEV_AUTH) return <DevAuth>{children}</DevAuth>;

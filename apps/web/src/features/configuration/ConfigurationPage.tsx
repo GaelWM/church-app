@@ -4,15 +4,15 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Ban, Building2, ArrowLeftRight, Plus, RotateCcw, ScrollText, Settings, Tags, Users as UsersIcon, Wallet } from "lucide-react";
 import { ACCOUNT_TYPES, CURRENCIES, findRoleConflict, ROLE_LABELS, ROLES, type Role } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader } from "@/components/common";
-import { TAB_LABELS } from "../../app/routes";
+import { ActionButton, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader } from "@/components/common";
+import { TAB_ICONS, TAB_LABELS } from "../../app/routes";
 import { useApi } from "../../core/api";
 import { requiredSelect } from "../../core/forms";
 import { fmtDate, today } from "../../core/format";
@@ -34,9 +34,9 @@ export function ConfigurationPage() {
   useEffect(() => { if (params.get("tab") !== tab) setParams({ tab }, { replace: true }); }, [tab, params]);
   return (
     <>
-      <PageHeader title="Configuration" />
+      <PageHeader title="Configuration" icon={Settings} />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mb-4">
-        <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => <TabsTrigger key={t} value={t}>{l}</TabsTrigger>)}</TabsList>
+        <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => { const Icon = TAB_ICONS["/configuration"]![t]!; return <TabsTrigger key={t} value={t}><Icon />{l}</TabsTrigger>; })}</TabsList>
       </Tabs>
       {tab === "users" && <Users />}{tab === "parishes" && <Parishes />}{tab === "accounts" && <Accounts />}
       {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}
@@ -71,13 +71,13 @@ function Users() {
   const pName = (id: string) => s.me.parishes.find((p) => p.id === id)?.name ?? id.slice(0, 6);
   return (
     <>
-      <Card title="Utilisateurs" actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Utilisateur</Button>}>
+      <Card title="Utilisateurs" icon={UsersIcon} actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Utilisateur</Button>}>
         <ErrorNote error={toggle.error ?? addRole.error} />
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           Ajouter un profil dans :
           <NativeSelect size="sm" value={target} onChange={(e) => setTarget(e.target.value)}>{adminParishes.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</NativeSelect>
         </div>
-        <DataTable rows={users.data ?? []} columns={[
+        <DataTable rows={users.data ?? []} loading={users.isLoading} emptyIcon={UsersIcon} empty="Aucun utilisateur" columns={[
           { header: "Nom", cell: (u) => u.fullName }, { header: "Email", cell: (u) => u.email },
           { header: "Profils", cell: (u) => u.roles.map((r: any) => `${ROLE_LABELS[r.role as Role]} (${pName(r.parishId)})`).join(", ") },
           { header: "Actif", cell: (u) => (u.active ? "Oui" : "Non") },
@@ -86,7 +86,7 @@ function Users() {
               <NativeSelect size="sm" defaultValue="" onChange={(e) => { if (e.target.value) { addRole.mutate({ user: u, parishId: target, role: e.target.value as Role }); e.target.value = ""; } }}>
                 <option value="">+ profil…</option>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
               </NativeSelect>
-              {u.id !== s.me.user.id && <Button size="sm" variant={u.active ? "destructive" : "outline"} onClick={() => toggle.mutate({ id: u.id, state: u.active ? "deactivate" : "activate" })}>{u.active ? "Désactiver" : "Réactiver"}</Button>}
+              {u.id !== s.me.user.id && <ActionButton size="sm" variant={u.active ? "destructive" : "outline"} icon={u.active ? Ban : RotateCcw} pending={toggle.isPending && toggle.variables?.id === u.id} onClick={() => toggle.mutate({ id: u.id, state: u.active ? "deactivate" : "activate" })}>{u.active ? "Désactiver" : "Réactiver"}</ActionButton>}
             </span>) },
         ]} />
       </Card>
@@ -131,8 +131,8 @@ function Parishes() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Card title="Paroisses" actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Paroisse</Button>}>
-        <DataTable rows={s.me.parishes} columns={[{ header: "Code", cell: (p) => p.code }, { header: "Nom", cell: (p) => p.name }, { header: "Ville", cell: (p) => p.city ?? "" }]} />
+      <Card title="Paroisses" icon={Building2} actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Paroisse</Button>}>
+        <DataTable rows={s.me.parishes} emptyIcon={Building2} columns={[{ header: "Code", cell: (p) => p.code }, { header: "Nom", cell: (p) => p.name }, { header: "Ville", cell: (p) => p.city ?? "" }]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouvelle paroisse" className="sm:max-w-md"><ParishForm onClose={() => setOpen(false)} /></ModalForm>
     </>
@@ -164,8 +164,8 @@ function Accounts() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Card title={`Comptes — ${s.parish?.name ?? ""}`} actions={!s.consolidated && <Button size="sm" onClick={() => setOpen(true)}><Plus /> Compte</Button>}>
-        <DataTable rows={accounts.data ?? []} columns={[{ header: "Nom", cell: (a) => a.name }, { header: "Type", cell: (a) => TYPE_LABEL[a.type] }, { header: "Devise", cell: (a) => a.currency }, { header: "Banque", cell: (a) => a.bankName ?? "" }, { header: "Numéro", cell: (a) => a.number ?? "" }]} />
+      <Card title={`Comptes — ${s.parish?.name ?? ""}`} icon={Wallet} actions={!s.consolidated && <Button size="sm" onClick={() => setOpen(true)}><Plus /> Compte</Button>}>
+        <DataTable rows={accounts.data ?? []} loading={accounts.isLoading} emptyIcon={Wallet} empty="Aucun compte" columns={[{ header: "Nom", cell: (a) => a.name }, { header: "Type", cell: (a) => TYPE_LABEL[a.type] }, { header: "Devise", cell: (a) => a.currency }, { header: "Banque", cell: (a) => a.bankName ?? "" }, { header: "Numéro", cell: (a) => a.number ?? "" }]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouveau compte" description="Un compte a une seule devise."><AccountForm onClose={() => setOpen(false)} /></ModalForm>
     </>
@@ -211,9 +211,9 @@ function Categories() {
   const disable = useMutation({ mutationFn: (id: string) => api.patch(`/categories/${id}`, { active: false }), onSuccess: invalidate });
   return (
     <>
-      <Card title="Catégories" actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Catégorie</Button>}>
+      <Card title="Catégories" icon={Tags} actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Catégorie</Button>}>
         <ErrorNote error={disable.error} />
-        <DataTable rows={cats.data ?? []} columns={[{ header: "Type", cell: (c) => c.kind }, { header: "Groupe", cell: (c) => c.group ?? "" }, { header: "Nom", cell: (c) => c.name }, { header: "", cell: (c) => <Button size="sm" variant="outline" onClick={() => disable.mutate(c.id)}>Désactiver</Button> }]} />
+        <DataTable rows={cats.data ?? []} loading={cats.isLoading} emptyIcon={Tags} columns={[{ header: "Type", cell: (c) => c.kind }, { header: "Groupe", cell: (c) => c.group ?? "" }, { header: "Nom", cell: (c) => c.name }, { header: "", cell: (c) => <ActionButton size="sm" variant="outline" icon={Ban} pending={disable.isPending && disable.variables === c.id} onClick={() => disable.mutate(c.id)}>Désactiver</ActionButton> }]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouvelle catégorie" className="sm:max-w-md"><CategoryForm onClose={() => setOpen(false)} /></ModalForm>
     </>
@@ -245,9 +245,9 @@ function Rate() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Card title="Taux de change (1 USD = X CDF) — historique conservé" actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Nouveau taux</Button>}>
+      <Card title="Taux de change (1 USD = X CDF) — historique conservé" icon={ArrowLeftRight} actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Nouveau taux</Button>}>
         <p className="muted">Le taux est copié sur chaque écriture à la saisie : modifier le taux ne change jamais l'historique. Tous les utilisateurs sont notifiés par email.</p>
-        <DataTable rows={rates.data ?? []} columns={[{ header: "Effectif", cell: (r) => fmtDate(r.effectiveFrom) }, { header: "Taux", align: "right", cell: (r) => r.rateCdfPerUsd }]} />
+        <DataTable rows={rates.data ?? []} loading={rates.isLoading} emptyIcon={ArrowLeftRight} empty="Aucun taux défini" columns={[{ header: "Effectif", cell: (r) => fmtDate(r.effectiveFrom) }, { header: "Taux", align: "right", cell: (r) => r.rateCdfPerUsd }]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouveau taux de change" className="sm:max-w-md"><RateForm onClose={() => setOpen(false)} onDone={() => rates.refetch()} /></ModalForm>
     </>
@@ -273,8 +273,8 @@ function Audit() {
   const api = useApi();
   const q = useQuery({ queryKey: useScopedKey("audit"), queryFn: () => api.get<any[]>("/audit") });
   return (
-    <Card title="Journal d'audit">
-      <DataTable rows={q.data ?? []} columns={[
+    <Card title="Journal d'audit" icon={ScrollText}>
+      <DataTable rows={q.data ?? []} loading={q.isLoading} emptyIcon={ScrollText} empty="Aucune action enregistrée" columns={[
         { header: "Date", cell: (a) => new Date(a.at).toLocaleString("fr-FR") }, { header: "Action", cell: (a) => a.action },
         { header: "Objet", cell: (a) => `${a.entity} ${String(a.entityId ?? "").slice(0, 8)}` }, { header: "Auteur", cell: (a) => String(a.actorId ?? "").slice(0, 8) },
       ]} />

@@ -6,7 +6,10 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, Field, StatusBadge, PageHeader } from "../../components/common";
+import { BookOpen, FileSpreadsheet, FileText, History, ListFilter } from "lucide-react";
+import { STATUS_LABELS, type TxStatus } from "@church/shared";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, DataTable, Field, StatusBadge, PageHeader, STATUS_ICON } from "../../components/common";
 import { exportExcel, exportPdf } from "./export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,15 +39,15 @@ export function JournalPage() {
 
   return (
     <>
-      <PageHeader title="Journal des transactions">
+      <PageHeader title="Journal des transactions" icon={BookOpen}>
         {s.can("report.export") && (
           <span className="actions no-print">
-            <Button size="sm" variant="outline" onClick={() => exportExcel("journal", head, table())}>Excel</Button>
-            <Button size="sm" variant="outline" onClick={() => exportPdf(`Journal — ${s.parish?.name ?? "Consolidé"}`, head, table())}>PDF</Button>
+            <Button size="sm" variant="outline" onClick={() => exportExcel("journal", head, table())}><FileSpreadsheet />Excel</Button>
+            <Button size="sm" variant="outline" onClick={() => exportPdf(`Journal — ${s.parish?.name ?? "Consolidé"}`, head, table())}><FileText />PDF</Button>
           </span>
         )}
       </PageHeader>
-      <Card>
+      <Card title="Filtres" icon={ListFilter}>
         <div className="form-grid">
           <Field label="Du"><Input type="date" value={f.from} onChange={set("from")} /></Field>
           <Field label="Au"><Input type="date" value={f.to} onChange={set("to")} /></Field>
@@ -56,7 +59,7 @@ export function JournalPage() {
       </Card>
       <Card>
         <DataTable
-          rows={data}
+          rows={data} loading={rows.isLoading} emptyIcon={BookOpen} empty="Aucune écriture pour ces filtres"
           columns={[
             { header: "Date", cell: (r) => fmtDate(r.date) },
             { header: "Réf.", cell: (r) => <a href="#" onClick={(e) => { e.preventDefault(); setOpen(open === r.id ? null : r.id); }}>{r.reference}</a> },
@@ -68,10 +71,28 @@ export function JournalPage() {
             { header: "Statut", cell: (r) => <StatusBadge status={r.status} /> },
           ]}
         />
-        {open && detail.data && (
+        {open && (
           <div className="mt-3 rounded-lg border p-3">
-            <h3 className="mb-1 font-medium">Historique de validation — {detail.data.reference}</h3>
-            <ul>{detail.data.events.map((e: any) => <li key={e.id}>{new Date(e.at).toLocaleString("fr-FR")} — {e.actorName} : {e.fromStatus ?? "∅"} → {e.toStatus}{e.comment ? ` (${e.comment})` : ""}</li>)}</ul>
+            <h3 className="mb-2 flex items-center gap-2 font-medium"><History className="size-4 text-muted-foreground" />Historique de validation{detail.data ? ` — ${detail.data.reference}` : ""}</h3>
+            {detail.isLoading ? (
+              <div role="status" aria-label="Chargement" className="space-y-2"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-1/2" /><Skeleton className="h-5 w-3/5" /></div>
+            ) : (
+              <ol className="space-y-2">
+                {detail.data?.events.map((e: any) => {
+                  const Icon = STATUS_ICON[e.toStatus as TxStatus];
+                  return (
+                    <li key={e.id} className="flex items-start gap-2 text-sm">
+                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div>
+                        <b>{STATUS_LABELS[e.toStatus as TxStatus] ?? e.toStatus}</b> — {e.actorName}
+                        <span className="text-muted-foreground"> · {new Date(e.at).toLocaleString("fr-FR")}</span>
+                        {e.comment && <div className="text-muted-foreground">« {e.comment} »</div>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </div>
         )}
       </Card>

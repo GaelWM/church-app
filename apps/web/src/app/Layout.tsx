@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ComponentType } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, BookOpen, Building2, CheckCheck, ChevronDown, Handshake, Landmark, LayoutDashboard, LogOut, Menu, Settings, Users } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, BookOpen, Building2, CheckCheck, ChevronDown, Handshake, Landmark, LayoutDashboard, LogOut, Menu, Settings, Users, WifiOff, Eye } from "lucide-react";
 import { Banner } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -115,8 +115,8 @@ export function Layout() {
         </header>
 
         <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
-          {!online && <Banner>Hors ligne — les nouvelles écritures sont gardées en brouillon sur cet appareil.</Banner>}
-          {s.consolidated && <Banner>Vue consolidée : lecture seule.</Banner>}
+          {!online && <Banner icon={WifiOff}>Hors ligne — les nouvelles écritures sont gardées en brouillon sur cet appareil.</Banner>}
+          {s.consolidated && <Banner icon={Eye}>Vue consolidée : lecture seule.</Banner>}
           <Outlet />
         </main>
       </div>

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { FileText, HandCoins, Handshake, ReceiptText, Users, Plus } from "lucide-react";
 import { CURRENCIES, parseAmount, type Currency } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,9 +48,9 @@ export function EngagementsPage() {
 
   return (
     <>
-      <PageHeader title="Engagements" />
-      <Card title="Promesses de dons" actions={canEnter && <Button size="sm" onClick={() => setDialog("pledge")}><Plus /> Promesse</Button>}>
-        <DataTable<Pledge> rows={pledges.data ?? []} columns={[
+      <PageHeader title="Engagements" icon={Handshake} />
+      <Card title="Promesses de dons" icon={HandCoins} actions={canEnter && <Button size="sm" onClick={() => setDialog("pledge")}><Plus /> Promesse</Button>}>
+        <DataTable<Pledge> rows={pledges.data ?? []} loading={pledges.isLoading} emptyIcon={HandCoins} empty="Aucune promesse de don" columns={[
           { header: "Donateur", cell: (x) => x.donorName ?? members.data?.find((mm) => mm.id === x.memberId)?.fullName ?? "" },
           { header: "Catégorie", cell: (x) => recettes.data?.find((r) => r.id === x.categoryId)?.name ?? "" },
           { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
@@ -61,9 +61,9 @@ export function EngagementsPage() {
         <p className="muted">Chaque paiement est une recette normale liée à la promesse (champ « Promesse liée » dans Recettes).</p>
       </Card>
 
-      <Card title="Engagements de dépenses" actions={canEnter && <Button size="sm" onClick={() => setDialog("commitment")}><Plus /> Engagement</Button>}>
+      <Card title="Engagements de dépenses" icon={ReceiptText} actions={canEnter && <Button size="sm" onClick={() => setDialog("commitment")}><Plus /> Engagement</Button>}>
         <ErrorNote error={markPaid.error} />
-        <DataTable<Commitment> rows={commitments.data ?? []} columns={[
+        <DataTable<Commitment> rows={commitments.data ?? []} loading={commitments.isLoading} emptyIcon={ReceiptText} empty="Aucun engagement de dépense" columns={[
           { header: "Bénéficiaire", cell: (x) => x.payee }, { header: "Catégorie", cell: (x) => depenses.data?.find((d) => d.id === x.categoryId)?.name ?? "" },
           { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
           { header: "Montant", align: "right", cell: (x) => money(x.amountMinor, x.currency) }, { header: "Statut", cell: (x) => (x.status === "paid" ? "Payé" : "Ouvert") },
@@ -75,15 +75,15 @@ export function EngagementsPage() {
         ]} />
       </Card>
 
-      <Card title="Membres (dîme et relevés de dons)" actions={
+      <Card title="Membres (dîme et relevés de dons)" icon={Users} actions={
         <span className="flex items-center gap-2">
           <Input className="h-7 w-20" aria-label="Année du relevé" value={year} onChange={(e) => setYear(e.target.value)} />
           {canEnter && <Button size="sm" onClick={() => setDialog("member")}><Plus /> Membre</Button>}
         </span>
       }>
-        <DataTable<Member> rows={members.data ?? []} columns={[
+        <DataTable<Member> rows={members.data ?? []} loading={members.isLoading} emptyIcon={Users} empty="Aucun membre enregistré" columns={[
           { header: "Nom", cell: (x) => x.fullName }, { header: "Téléphone", cell: (x) => x.phone ?? "" },
-          { header: "", cell: (x) => s.can("report.export") && <Button size="sm" variant="outline" onClick={() => statement(x)}>Relevé annuel PDF</Button> },
+          { header: "", cell: (x) => s.can("report.export") && <Button size="sm" variant="outline" onClick={() => statement(x)}><FileText />Relevé annuel PDF</Button> },
         ]} />
       </Card>
 

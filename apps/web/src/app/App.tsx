@@ -15,17 +15,20 @@ import { EngagementsPage } from "../features/engagements/EngagementsPage";
 import { EffectifsPage } from "../features/effectifs/EffectifsPage";
 import { ValidationPage } from "../features/validation/ValidationPage";
 import { ConfigurationPage } from "../features/configuration/ConfigurationPage";
+import { LogOut, RefreshCw, ServerCrash, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ActionButton, PageSpinner } from "@/components/common";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: false } } });
 
 function NotConfigured() {
   const { logout } = useAuth();
   return (
-    <div className="center"><div>
+    <div className="center"><div className="flex flex-col items-center">
+      <ShieldAlert className="mb-3 size-10 text-muted-foreground" />
       <h2 className="mb-2 text-xl font-semibold">Accès non configuré</h2>
       <p className="mb-4 text-muted-foreground">Votre connexion est valide, mais aucun profil actif n'est associé à ce compte.<br />Contactez votre administrateur.</p>
-      <Button onClick={() => logout()}>Se déconnecter</Button>
+      <Button onClick={() => logout()}><LogOut />Se déconnecter</Button>
     </div></div>
   );
 }
@@ -45,9 +48,15 @@ function Authenticated() {
 
 function Gate() {
   const me = useMe();
-  if (me.isLoading) return <div className="center"><p className="text-muted-foreground">Chargement…</p></div>;
+  if (me.isLoading) return <PageSpinner label="Chargement de votre session…" />;
   if (me.error instanceof ApiError && me.error.status === 403) return <NotConfigured />;
-  if (me.error || !me.data) return <div className="center"><p className="text-destructive">Impossible de joindre le serveur.</p></div>;
+  if (me.error || !me.data) return (
+    <div className="center"><div className="flex flex-col items-center gap-3">
+      <ServerCrash className="size-10 text-muted-foreground" />
+      <p className="text-destructive">{(me.error as Error | null)?.message || "Impossible de joindre le serveur."}</p>
+      <ActionButton variant="outline" icon={RefreshCw} pending={me.isFetching} onClick={() => me.refetch()}>Réessayer</ActionButton>
+    </div></div>
+  );
   if (!me.data.parishes.length) return <NotConfigured />;
   return (
     <SessionProvider me={me.data}>

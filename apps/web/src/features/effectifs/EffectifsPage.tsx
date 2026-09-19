@@ -3,10 +3,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Check, Plus, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
+import { ActionButton, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
+import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
 import { useApi } from "../../core/api";
 import { fmtDate, today } from "../../core/format";
 import { useInvalidateLedger, useScopedKey } from "../../core/queries";
@@ -30,10 +31,15 @@ export function EffectifsPage() {
 
   return (
     <>
-      <PageHeader title="Effectifs">{canEnter && <Button onClick={() => setOpen(true)}><Plus /> Nouveau comptage</Button>}</PageHeader>
-      <Card title="Comptages">
+      <PageHeader title="Effectifs" icon={Users}>
+        <span className="flex items-center gap-2">
+          <ValidationFlowButton counts={countByStatus(list.data)} />
+          {canEnter && <Button onClick={() => setOpen(true)}><Plus /> Nouveau comptage</Button>}
+        </span>
+      </PageHeader>
+      <Card title="Comptages" icon={Users}>
         <ErrorNote error={act.error} />
-        <DataTable<Att> rows={list.data ?? []} columns={[
+        <DataTable<Att> rows={list.data ?? []} loading={list.isLoading} emptyIcon={Users} empty="Aucun comptage enregistré" columns={[
           { header: "Date", cell: (a) => fmtDate(a.serviceDate) }, { header: "Culte", cell: (a) => a.serviceType },
           ...GROUPS.map((g) => ({ header: g, align: "right" as const, cell: (a: Att) => a[g] })),
           { header: "Total", align: "right", cell: (a) => total(a) }, { header: "Statut", cell: (a) => <StatusBadge status={a.status} /> },
@@ -41,9 +47,9 @@ export function EffectifsPage() {
             const mine = a.enteredBy === s.me.user.id;
             return (
               <span className="actions">
-                {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <Button size="sm" onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</Button>}
-                {!mine && a.status === "soumise" && s.can("transaction.validate1") && <><Button size="sm" onClick={() => act.mutate({ id: a.id, action: "validate1" })}>Valider</Button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
-                {!mine && a.status === "validee1" && s.can("transaction.validate2") && <><Button size="sm" onClick={() => act.mutate({ id: a.id, action: "validate2" })}>Valider</Button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
+                {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <ActionButton size="sm" icon={Send} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "submit")} onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</ActionButton>}
+                {!mine && a.status === "soumise" && s.can("transaction.validate1") && <><ActionButton size="sm" icon={Check} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "validate1")} onClick={() => act.mutate({ id: a.id, action: "validate1" })}>Valider</ActionButton><ReasonButton danger icon={X} label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
+                {!mine && a.status === "validee1" && s.can("transaction.validate2") && <><ActionButton size="sm" icon={Check} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "validate2")} onClick={() => act.mutate({ id: a.id, action: "validate2" })}>Valider</ActionButton><ReasonButton danger icon={X} label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
               </span>);
           } },
         ]} />
