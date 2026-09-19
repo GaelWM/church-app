@@ -5,7 +5,11 @@ import { useApi } from "../../core/api";
 import { fmtDate, money, usd } from "../../core/format";
 import { useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
-import { Card, DataTable, Provisional } from "../../components/ui";
+import { Card, DataTable, Provisional, PageHeader } from "../../components/common";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Dash {
   provisional: boolean;
@@ -35,12 +39,11 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="topbar">
-        <h2>Tableau de bord {d.provisional && <Provisional />}</h2>
-        <label><input type="checkbox" checked={provisional} onChange={(e) => setProvisional(e.target.checked)} /> Inclure les écritures en attente (provisoire)</label>
-      </div>
+      <PageHeader title={<>Tableau de bord {d.provisional && <Provisional />}</>}>
+        <label className="flex items-center gap-2 text-sm"><Checkbox checked={provisional} onCheckedChange={(v) => setProvisional(v === true)} /> Inclure les écritures en attente (provisoire)</label>
+      </PageHeader>
 
-      <div className="grid">
+      <div className="stat-grid">
         <Card title="Total CDF"><div className="stat">{money(total("CDF"), "CDF")}</div></Card>
         <Card title="Total USD"><div className="stat">{money(total("USD"), "USD")}</div></Card>
         {myPending > 0 && <Card title="À valider par vous"><div className="stat">{myPending}</div></Card>}
@@ -55,9 +58,9 @@ export function DashboardPage() {
         {months.map((m) => (
           <div key={m} style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><b>{m}</b><span>Résultat net : {usd(flow(m, "recette") - flow(m, "depense"))}</span></div>
-            <div className="bar" title="Recettes"><i style={{ width: `${Number((flow(m, "recette") * 100n) / max)}%`, background: "var(--ok)" }} /></div>
-            <div className="bar" title="Dépenses" style={{ marginTop: 2 }}><i style={{ width: `${Number((flow(m, "depense") * 100n) / max)}%`, background: "var(--bad)" }} /></div>
-            <small className="muted">Recettes {usd(flow(m, "recette"))} · Dépenses {usd(flow(m, "depense"))}</small>
+            <div className="h-2 overflow-hidden rounded bg-muted" title="Recettes"><i className="block h-full" style={{ width: `${Number((flow(m, "recette") * 100n) / max)}%`, background: "var(--color-emerald-600)" }} /></div>
+            <div className="mt-0.5 h-2 overflow-hidden rounded bg-muted" title="Dépenses"><i className="block h-full" style={{ width: `${Number((flow(m, "depense") * 100n) / max)}%`, background: "var(--destructive)" }} /></div>
+            <small className="text-muted-foreground">Recettes {usd(flow(m, "recette"))} · Dépenses {usd(flow(m, "depense"))}</small>
           </div>
         ))}
       </Card>
@@ -70,7 +73,7 @@ export function DashboardPage() {
         ]} />
       </Card>
 
-      <div className="grid">
+      <div className="stat-grid">
         <Card title="Promesses de dons">
           <DataTable rows={d.pledges} columns={[
             { header: "Donateur", cell: (p) => p.donor_name ?? "—" }, { header: "Promis", align: "right", cell: (p) => money(p.promised, p.currency) },

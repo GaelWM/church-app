@@ -6,7 +6,12 @@ import { fmtDate, money, today } from "../../core/format";
 import { useAccounts, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, Field } from "../../components/ui";
+import { Card, DataTable, ErrorNote, Field, PageHeader } from "../../components/common";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const OPS = [
   ["versement", "Versement (caisse vers banque)"], ["retrait", "Retrait (banque vers caisse)"], ["virement", "Virement entre comptes"],
@@ -18,12 +23,12 @@ export function BanquesPage() {
   const [tab, setTab] = useState<"operations" | "rapprochement" | "periodes">("operations");
   return (
     <>
-      <div className="topbar"><h2>Banques</h2></div>
-      <div className="tabs">
-        {(["operations", "rapprochement", "periodes"] as const).map((t) => (
-          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{{ operations: "Opérations", rapprochement: "Rapprochement bancaire", periodes: "Clôture mensuelle" }[t]}</button>
-        ))}
-      </div>
+      <PageHeader title="Banques" />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mb-4">
+        <TabsList>
+          {(["operations", "rapprochement", "periodes"] as const).map((t) => <TabsTrigger key={t} value={t}>{{ operations: "Opérations", rapprochement: "Rapprochement bancaire", periodes: "Clôture mensuelle" }[t]}</TabsTrigger>)}
+        </TabsList>
+      </Tabs>
       {tab === "operations" && <Operations canEnter={s.can("transaction.create") && !s.consolidated} />}
       {tab === "rapprochement" && <Reconciliation />}
       {tab === "periodes" && <Periods />}
@@ -54,18 +59,18 @@ function Operations({ canEnter }: { canEnter: boolean }) {
       {canEnter && (
         <Card title="Nouvelle opération">
           <div className="form-grid">
-            <Field label="Opération"><select value={type} onChange={(e) => setType(e.target.value as any)}>{OPS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
-            <Field label="Date"><input type="date" value={v.date} onChange={set("date")} /></Field>
-            {single ? <Field label="Compte"><select value={v.account} onChange={set("account")}><option value="">—</option>{opts}</select></Field> : (
+            <Field label="Opération"><NativeSelect value={type} onChange={(e) => setType(e.target.value as any)}>{OPS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</NativeSelect></Field>
+            <Field label="Date"><Input type="date" value={v.date} onChange={set("date")} /></Field>
+            {single ? <Field label="Compte"><NativeSelect value={v.account} onChange={set("account")}><option value="">—</option>{opts}</NativeSelect></Field> : (
               <>
-                <Field label="De"><select value={v.from} onChange={set("from")}><option value="">—</option>{opts}</select></Field>
-                <Field label="Vers"><select value={v.to} onChange={set("to")}><option value="">—</option>{opts}</select></Field>
+                <Field label="De"><NativeSelect value={v.from} onChange={set("from")}><option value="">—</option>{opts}</NativeSelect></Field>
+                <Field label="Vers"><NativeSelect value={v.to} onChange={set("to")}><option value="">—</option>{opts}</NativeSelect></Field>
               </>
             )}
-            <Field label="Montant (devise du compte source)"><input inputMode="decimal" value={v.amount} onChange={set("amount")} placeholder="0,00" /></Field>
-            {type === "change" && <Field label="Taux obtenu (1 USD = X CDF)"><input inputMode="decimal" value={v.rate} onChange={set("rate")} /></Field>}
-            <Field label="Description"><input value={v.description} onChange={set("description")} /></Field>
-            <button disabled={create.isPending} onClick={() => create.mutate()}>Enregistrer (brouillon)</button>
+            <Field label="Montant (devise du compte source)"><Input inputMode="decimal" value={v.amount} onChange={set("amount")} placeholder="0,00" /></Field>
+            {type === "change" && <Field label="Taux obtenu (1 USD = X CDF)"><Input inputMode="decimal" value={v.rate} onChange={set("rate")} /></Field>}
+            <Field label="Description"><Input value={v.description} onChange={set("description")} /></Field>
+            <Button size="sm" disabled={create.isPending} onClick={() => create.mutate()}>Enregistrer (brouillon)</Button>
           </div>
           <ErrorNote error={create.error} />
         </Card>
@@ -98,14 +103,14 @@ function Reconciliation() {
   const cols = (matched: boolean) => [
     { header: "Date", cell: (t: Tx) => fmtDate(t.date) }, { header: "Réf.", cell: (t: Tx) => t.reference }, { header: "Description", cell: (t: Tx) => t.description ?? "" },
     { header: "Montant", align: "right" as const, cell: (t: Tx) => (t.direction === "in" ? "" : "-") + money(t.amountMinor, t.currency as Currency) },
-    { header: "", cell: (t: Tx) => canTick && <button className="ghost" onClick={() => toggle.mutate({ ids: [t.id], matched: !matched })}>{matched ? "Décocher" : "Pointer"}</button> },
+    { header: "", cell: (t: Tx) => canTick && <Button size="sm" variant="outline" onClick={() => toggle.mutate({ ids: [t.id], matched: !matched })}>{matched ? "Décocher" : "Pointer"}</Button> },
   ];
   return (
     <>
       <Card>
         <div className="form-grid">
-          <Field label="Compte bancaire"><select value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">—</option>{accounts.data?.filter((a) => a.type !== "caisse").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-          <Field label="Mois du relevé"><input type="month" value={ym} onChange={(e) => setYm(e.target.value)} /></Field>
+          <Field label="Compte bancaire"><NativeSelect value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">—</option>{accounts.data?.filter((a) => a.type !== "caisse").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></Field>
+          <Field label="Mois du relevé"><Input type="month" value={ym} onChange={(e) => setYm(e.target.value)} /></Field>
         </div>
       </Card>
       {data.data && (
@@ -129,9 +134,9 @@ function Periods() {
   return (
     <Card title="Périodes clôturées">
       {s.can("period.close") && !s.consolidated && (
-        <div className="inline-form" style={{ marginBottom: 12 }}>
-          <input type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
-          <button onClick={() => window.confirm("Clôturer ce mois ? Aucune écriture ne pourra y être ajoutée.") && close.mutate()}>Clôturer le mois</button>
+        <div className="mb-3 inline-flex items-center gap-1.5">
+          <Input type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
+          <Button size="sm" onClick={() => window.confirm("Clôturer ce mois ? Aucune écriture ne pourra y être ajoutée.") && close.mutate()}>Clôturer le mois</Button>
         </div>
       )}
       <ErrorNote error={close.error} />

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { parishes, userParishRoles, users } from "@church/db";
 import { can, type Permission, type Role } from "@church/shared";
 import type { AppEnv, Bindings, Deps } from "../env";
+import { devAuthEnabled } from "../services/dev";
 
 const jwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -24,7 +25,8 @@ export const authenticate = (deps: Deps) =>
     if (!token) throw new HTTPException(401, { message: "Jeton manquant" });
     let sub: string;
     try {
-      sub = (await (deps.verifyToken ?? verifyAuth0Token)(token, c.env)).sub;
+      if (devAuthEnabled(c.env) && token.startsWith("dev:")) sub = token.slice(4);
+      else sub = (await (deps.verifyToken ?? verifyAuth0Token)(token, c.env)).sub;
     } catch {
       throw new HTTPException(401, { message: "Jeton invalide" });
     }

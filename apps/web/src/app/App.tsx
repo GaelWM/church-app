@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Auth0Provider, useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
+import { AuthProvider, useAuth } from "../core/auth";
 import "../core/i18n";
 import { ApiContext, ApiError, createApiClient } from "../core/api";
 import { SessionProvider, useMe, useSession } from "../core/session";
@@ -15,16 +15,17 @@ import { EngagementsPage } from "../features/engagements/EngagementsPage";
 import { EffectifsPage } from "../features/effectifs/EffectifsPage";
 import { ValidationPage } from "../features/validation/ValidationPage";
 import { ConfigurationPage } from "../features/configuration/ConfigurationPage";
+import { Button } from "@/components/ui/button";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: false } } });
 
 function NotConfigured() {
-  const { logout } = useAuth0();
+  const { logout } = useAuth();
   return (
     <div className="center"><div>
-      <h2>Accès non configuré</h2>
-      <p>Votre connexion est valide, mais aucun profil actif n'est associé à ce compte.<br />Contactez votre administrateur.</p>
-      <button onClick={() => logout({ logoutParams: { returnTo: location.origin } })}>Se déconnecter</button>
+      <h2 className="mb-2 text-xl font-semibold">Accès non configuré</h2>
+      <p className="mb-4 text-muted-foreground">Votre connexion est valide, mais aucun profil actif n'est associé à ce compte.<br />Contactez votre administrateur.</p>
+      <Button onClick={() => logout()}>Se déconnecter</Button>
     </div></div>
   );
 }
@@ -33,8 +34,8 @@ function NotConfigured() {
 const parishRef: { current: string | null } = { current: null };
 
 function Authenticated() {
-  const { getAccessTokenSilently } = useAuth0();
-  const api = useMemo(() => createApiClient(async () => (await getAccessTokenSilently()) as string, () => parishRef.current ?? localStorage.getItem("church.parish")), [getAccessTokenSilently]);
+  const { getToken } = useAuth();
+  const api = useMemo(() => createApiClient(getToken, () => parishRef.current ?? localStorage.getItem("church.parish")), [getToken]);
   return (
     <ApiContext.Provider value={api}>
       <Gate />
@@ -44,9 +45,9 @@ function Authenticated() {
 
 function Gate() {
   const me = useMe();
-  if (me.isLoading) return <div className="center"><p className="muted">Chargement…</p></div>;
+  if (me.isLoading) return <div className="center"><p className="text-muted-foreground">Chargement…</p></div>;
   if (me.error instanceof ApiError && me.error.status === 403) return <NotConfigured />;
-  if (me.error || !me.data) return <div className="center"><p className="error">Impossible de joindre le serveur.</p></div>;
+  if (me.error || !me.data) return <div className="center"><p className="text-destructive">Impossible de joindre le serveur.</p></div>;
   if (!me.data.parishes.length) return <NotConfigured />;
   return (
     <SessionProvider me={me.data}>
@@ -74,22 +75,12 @@ function ParishSync() {
   return null;
 }
 
-const Protected = withAuthenticationRequired(Authenticated, { onRedirecting: () => <div className="center"><p className="muted">Redirection vers la connexion…</p></div> });
-
 export function App() {
-  const env = import.meta.env;
-  if (!env.VITE_AUTH0_DOMAIN || !env.VITE_AUTH0_CLIENT_ID) {
-    return <div className="center"><p>Configurez VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID et VITE_AUTH0_AUDIENCE (voir README).</p></div>;
-  }
   return (
-    <Auth0Provider
-      domain={env.VITE_AUTH0_DOMAIN} clientId={env.VITE_AUTH0_CLIENT_ID}
-      authorizationParams={{ redirect_uri: window.location.origin, audience: env.VITE_AUTH0_AUDIENCE }}
-      cacheLocation="localstorage" useRefreshTokens
-    >
+    <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter><Protected /></BrowserRouter>
+        <BrowserRouter><Authenticated /></BrowserRouter>
       </QueryClientProvider>
-    </Auth0Provider>
+    </AuthProvider>
   );
 }

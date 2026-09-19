@@ -6,8 +6,12 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, Field, StatusBadge } from "../../components/ui";
+import { Card, DataTable, Field, StatusBadge, PageHeader } from "../../components/common";
 import { exportExcel, exportPdf } from "./export";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Row = Tx & { running_balance: string; category_id?: string; account_id?: string; amount_minor?: string; entered_by?: string };
 
@@ -32,23 +36,22 @@ export function JournalPage() {
 
   return (
     <>
-      <div className="topbar">
-        <h2>Journal des transactions</h2>
+      <PageHeader title="Journal des transactions">
         {s.can("report.export") && (
           <span className="actions no-print">
-            <button className="ghost" onClick={() => exportExcel("journal", head, table())}>Excel</button>
-            <button className="ghost" onClick={() => exportPdf(`Journal — ${s.parish?.name ?? "Consolidé"}`, head, table())}>PDF</button>
+            <Button size="sm" variant="outline" onClick={() => exportExcel("journal", head, table())}>Excel</Button>
+            <Button size="sm" variant="outline" onClick={() => exportPdf(`Journal — ${s.parish?.name ?? "Consolidé"}`, head, table())}>PDF</Button>
           </span>
         )}
-      </div>
+      </PageHeader>
       <Card>
         <div className="form-grid">
-          <Field label="Du"><input type="date" value={f.from} onChange={set("from")} /></Field>
-          <Field label="Au"><input type="date" value={f.to} onChange={set("to")} /></Field>
-          <Field label="Compte"><select value={f.accountId} onChange={set("accountId")}><option value="">Tous</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
-          <Field label="Catégorie"><select value={f.categoryId} onChange={set("categoryId")}><option value="">Toutes</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-          <Field label="Devise"><select value={f.currency} onChange={set("currency")}><option value="">Toutes</option><option>CDF</option><option>USD</option></select></Field>
-          <Field label="Statut"><select value={f.status} onChange={set("status")}><option value="">Tous</option>{["brouillon", "soumise", "validee1", "validee", "rejetee"].map((x) => <option key={x}>{x}</option>)}</select></Field>
+          <Field label="Du"><Input type="date" value={f.from} onChange={set("from")} /></Field>
+          <Field label="Au"><Input type="date" value={f.to} onChange={set("to")} /></Field>
+          <Field label="Compte"><NativeSelect value={f.accountId} onChange={set("accountId")}><option value="">Tous</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></Field>
+          <Field label="Catégorie"><NativeSelect value={f.categoryId} onChange={set("categoryId")}><option value="">Toutes</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</NativeSelect></Field>
+          <Field label="Devise"><NativeSelect value={f.currency} onChange={set("currency")}><option value="">Toutes</option><option>CDF</option><option>USD</option></NativeSelect></Field>
+          <Field label="Statut"><NativeSelect value={f.status} onChange={set("status")}><option value="">Tous</option>{["brouillon", "soumise", "validee1", "validee", "rejetee"].map((x) => <option key={x}>{x}</option>)}</NativeSelect></Field>
         </div>
       </Card>
       <Card>
@@ -66,8 +69,8 @@ export function JournalPage() {
           ]}
         />
         {open && detail.data && (
-          <div className="card" style={{ marginTop: 12 }}>
-            <h3>Historique de validation — {detail.data.reference}</h3>
+          <div className="mt-3 rounded-lg border p-3">
+            <h3 className="mb-1 font-medium">Historique de validation — {detail.data.reference}</h3>
             <ul>{detail.data.events.map((e: any) => <li key={e.id}>{new Date(e.at).toLocaleString("fr-FR")} — {e.actorName} : {e.fromStatus ?? "∅"} → {e.toStatus}{e.comment ? ` (${e.comment})` : ""}</li>)}</ul>
           </div>
         )}

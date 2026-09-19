@@ -10,8 +10,13 @@ import { queueDraft, useOnline } from "../../core/offline";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, Field, ReasonButton, StatusBadge } from "../../components/ui";
+import { Card, DataTable, ErrorNote, Field, ReasonButton, StatusBadge, PageHeader, Banner } from "../../components/common";
 import { receiptPdf } from "./receipt";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const schema = z.object({
   date: z.string().min(1, "Date requise"),
@@ -105,41 +110,41 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
 
   return (
     <>
-      <div className="topbar"><h2>{title}</h2>{!online && <span className="badge badge-soumise">Hors ligne</span>}</div>
-      {notice && <div className="banner">{notice}</div>}
+      <PageHeader title={title}>{!online && <Badge variant="secondary">Hors ligne</Badge>}</PageHeader>
+      {notice && <Banner>{notice}</Banner>}
 
       {canEnter && (
         <Card title={editing ? `Modifier ${editing.reference}` : `Nouvelle ${isRecette ? "recette" : "dépense"}`}>
           <form onSubmit={handleSubmit((f) => save.mutate(f))} className="form-grid">
-            <Field label="Date" error={errors.date?.message}><input type="date" {...register("date")} /></Field>
+            <Field label="Date" error={errors.date?.message}><Input type="date" {...register("date")} /></Field>
             <Field label="Compte" error={errors.accountId?.message}>
-              <select {...register("accountId")}><option value="">—</option>{usable.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}</select>
+              <NativeSelect {...register("accountId")}><option value="">—</option>{usable.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}</NativeSelect>
             </Field>
             <Field label="Catégorie" error={errors.categoryId?.message}>
-              <select {...register("categoryId")}><option value="">—</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.group ? `${c.group} · ` : ""}{c.name}</option>)}</select>
+              <NativeSelect {...register("categoryId")}><option value="">—</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.group ? `${c.group} · ` : ""}{c.name}</option>)}</NativeSelect>
             </Field>
-            <Field label={`Montant ${account ? `(${account.currency})` : ""}`} error={errors.amount?.message}><input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
+            <Field label={`Montant ${account ? `(${account.currency})` : ""}`} error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
             {category?.requiresDepartment && (
               <Field label="Département">
-                <select {...register("departmentId")}><option value="">—</option>{departments.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+                <NativeSelect {...register("departmentId")}><option value="">—</option>{departments.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</NativeSelect>
               </Field>
             )}
             {isRecette && category?.name === "Dîme" && (
               <Field label="Membre (optionnel)">
-                <select {...register("memberId")}><option value="">—</option>{members.data?.map((m) => <option key={m.id} value={m.id}>{m.fullName}</option>)}</select>
+                <NativeSelect {...register("memberId")}><option value="">—</option>{members.data?.map((m) => <option key={m.id} value={m.id}>{m.fullName}</option>)}</NativeSelect>
               </Field>
             )}
             {isRecette && !!pledges.data?.length && (
               <Field label="Promesse liée (optionnel)">
-                <select {...register("pledgeId")}><option value="">—</option>{pledges.data.map((p) => <option key={p.id} value={p.id}>{p.donorName ?? p.id.slice(0, 8)}</option>)}</select>
+                <NativeSelect {...register("pledgeId")}><option value="">—</option>{pledges.data.map((p) => <option key={p.id} value={p.id}>{p.donorName ?? p.id.slice(0, 8)}</option>)}</NativeSelect>
               </Field>
             )}
-            {!isRecette && <Field label="Bénéficiaire"><input {...register("beneficiary")} /></Field>}
-            <Field label={isRecette ? "Référence" : "N° pièce (facture, reçu, bon de sortie)"}><input {...register("documentNumber")} /></Field>
-            <Field label="Description"><input {...register("description")} /></Field>
+            {!isRecette && <Field label="Bénéficiaire"><Input {...register("beneficiary")} /></Field>}
+            <Field label={isRecette ? "Référence" : "N° pièce (facture, reçu, bon de sortie)"}><Input {...register("documentNumber")} /></Field>
+            <Field label="Description"><Input {...register("description")} /></Field>
             <div className="actions">
-              <button type="submit" disabled={save.isPending}>{editing ? "Enregistrer" : "Ajouter (brouillon)"}</button>
-              {editing && <button type="button" className="ghost" onClick={() => { setEditing(null); reset({ date: today() }); }}>Annuler</button>}
+              <Button size="sm" type="submit" disabled={save.isPending}>{editing ? "Enregistrer" : "Ajouter (brouillon)"}</Button>
+              {editing && <Button size="sm" type="button" className="ghost" onClick={() => { setEditing(null); reset({ date: today() }); }}>Annuler</Button>}
             </div>
           </form>
           <ErrorNote error={save.error} />
@@ -162,14 +167,14 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
                 const mine = t.enteredBy === s.me.user.id;
                 return (
                   <span className="actions">
-                    {canEnter && mine && isEditable(t.status) && <button className="ghost" onClick={() => edit(t)}>Modifier</button>}
-                    {canEnter && mine && isEditable(t.status) && <button onClick={() => act.mutate({ id: t.id, action: "submit" })}>Soumettre</button>}
-                    {canEnter && mine && t.status === "brouillon" && <button className="danger" onClick={() => act.mutate({ id: t.id, action: "delete" })}>Supprimer</button>}
+                    {canEnter && mine && isEditable(t.status) && <Button size="sm" variant="outline" onClick={() => edit(t)}>Modifier</Button>}
+                    {canEnter && mine && isEditable(t.status) && <Button size="sm" onClick={() => act.mutate({ id: t.id, action: "submit" })}>Soumettre</Button>}
+                    {canEnter && mine && t.status === "brouillon" && <Button size="sm" variant="destructive" onClick={() => act.mutate({ id: t.id, action: "delete" })}>Supprimer</Button>}
                     {canEnter && t.status === "validee" && !t.reversesId && <ReasonButton danger label="Contre-passer" onConfirm={(comment) => act.mutate({ id: t.id, action: "reverse", body: { comment } })} />}
                     {canEnter && mine && isEditable(t.status) && (
-                      <label className="ghost-file"><input type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => e.target.files?.[0] && attach.mutate({ id: t.id, file: e.target.files[0] })} /><span className="badge">📎</span></label>
+                      <label className="cursor-pointer"><Input type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => e.target.files?.[0] && attach.mutate({ id: t.id, file: e.target.files[0] })} /><Badge variant="outline" title="Ajouter une pièce jointe">📎</Badge></label>
                     )}
-                    {isRecette && t.status === "validee" && <button className="ghost" onClick={() => receiptPdf(t, s.parish?.name ?? "", catName(t.categoryId), acctName(t.accountId))}>Reçu</button>}
+                    {isRecette && t.status === "validee" && <Button size="sm" variant="outline" onClick={() => receiptPdf(t, s.parish?.name ?? "", catName(t.categoryId), acctName(t.accountId))}>Reçu</Button>}
                   </span>
                 );
               },

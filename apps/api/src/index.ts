@@ -11,7 +11,10 @@ import { dashboardRoutes } from "./routes/dashboard";
 import { engagementRoutes } from "./routes/engagements";
 import { transactionRoutes } from "./routes/transactions";
 import { sendDigests, sendMonthlyReports } from "./services/cron";
+import { devAuthEnabled, consoleMailer } from "./services/dev";
 import { cloudflareMailer } from "./services/mailer";
+import { users } from "@church/db";
+import { eq } from "drizzle-orm";
 
 // bigint money columns serialise as strings in JSON.
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
@@ -21,13 +24,19 @@ const dbUrl = (env: Bindings) => env.HYPERDRIVE?.connectionString ?? env.DATABAS
 export function createApp(deps: Deps = {}) {
   const services = createMiddleware<AppEnv>(async (c, next) => {
     c.set("db", (deps.createDb ?? ((e) => createDb(dbUrl(e))))(c.env));
-    c.set("mailer", (deps.mailer ?? cloudflareMailer)(c.env));
+    c.set("mailer", deps.mailer ? deps.mailer(c.env) : devAuthEnabled(c.env) ? consoleMailer : cloudflareMailer(c.env));
     await next();
   });
 
   const api = new Hono<AppEnv>()
     .use(services)
     .get("/health", (c) => c.json({ ok: true }))
+    // Local development only: lists demo users for the login picker (404 unless DEV_AUTH is on).
+    .get("/dev/users", async (c) => {
+      if (!devAuthEnabled(c.env)) throw new HTTPException(404);
+      const rows = await c.get("db").select({ auth0Id: users.auth0Id, fullName: users.fullName, email: users.email }).from(users).where(eq(users.active, true));
+      return c.json(rows);
+    })
     .use(authenticate(deps))
     .route("/", configRoutes)
     .route("/transactions", transactionRoutes)

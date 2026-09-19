@@ -1,4 +1,5 @@
 import type { Bindings } from "../env";
+import { devAuthEnabled } from "./dev";
 
 const TOKEN_KEY = "auth0:mgmt-token";
 
@@ -33,6 +34,7 @@ async function mgmt(env: Bindings, path: string, init: RequestInit = {}) {
 }
 
 export async function createAuth0User(env: Bindings, email: string, fullName: string) {
+  if (devAuthEnabled(env)) return `dev|${email}`;
   const password = crypto.randomUUID() + crypto.randomUUID().toUpperCase() + "!1";
   const u = await mgmt(env, "/users", {
     method: "POST",
@@ -42,6 +44,7 @@ export async function createAuth0User(env: Bindings, email: string, fullName: st
 }
 
 export async function passwordSetLink(env: Bindings, auth0Id: string): Promise<string> {
+  if (devAuthEnabled(env)) return env.APP_URL;
   const t = await mgmt(env, "/tickets/password-change", {
     method: "POST",
     body: JSON.stringify({ user_id: auth0Id, result_url: env.APP_URL, ttl_sec: 7 * 24 * 3600, mark_email_as_verified: true }),
@@ -50,5 +53,6 @@ export async function passwordSetLink(env: Bindings, auth0Id: string): Promise<s
 }
 
 export async function setAuth0Blocked(env: Bindings, auth0Id: string, blocked: boolean) {
+  if (devAuthEnabled(env)) return;
   await mgmt(env, `/users/${encodeURIComponent(auth0Id)}`, { method: "PATCH", body: JSON.stringify({ blocked }) });
 }

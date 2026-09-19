@@ -4,7 +4,11 @@ import { useApi } from "../../core/api";
 import { fmtDate, today } from "../../core/format";
 import { useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
-import { Card, DataTable, ErrorNote, Field, ReasonButton, StatusBadge } from "../../components/ui";
+import { Card, DataTable, ErrorNote, Field, ReasonButton, StatusBadge, PageHeader } from "../../components/common";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Att { id: string; serviceDate: string; serviceType: string; hommes: number; femmes: number; jeunes: number; enfants: number; visiteurs: number; status: any; enteredBy: string }
 const GROUPS = ["hommes", "femmes", "jeunes", "enfants", "visiteurs"] as const;
@@ -22,14 +26,14 @@ export function EffectifsPage() {
 
   return (
     <>
-      <div className="topbar"><h2>Effectifs</h2></div>
+      <PageHeader title="Effectifs" />
       {canEnter && (
         <Card title="Nouveau comptage">
           <div className="form-grid">
-            <Field label="Date"><input type="date" value={f.serviceDate} onChange={(e) => setF({ ...f, serviceDate: e.target.value })} /></Field>
-            <Field label="Culte"><input value={f.serviceType} onChange={(e) => setF({ ...f, serviceType: e.target.value })} /></Field>
-            {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)}><input type="number" min={0} value={f[g]} onChange={(e) => setF({ ...f, [g]: Math.max(0, Number(e.target.value) || 0) })} /></Field>)}
-            <button disabled={add.isPending} onClick={() => add.mutate()}>Ajouter ({total(f)} présents)</button>
+            <Field label="Date"><Input type="date" value={f.serviceDate} onChange={(e) => setF({ ...f, serviceDate: e.target.value })} /></Field>
+            <Field label="Culte"><Input value={f.serviceType} onChange={(e) => setF({ ...f, serviceType: e.target.value })} /></Field>
+            {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)}><Input type="number" min={0} value={f[g]} onChange={(e) => setF({ ...f, [g]: Math.max(0, Number(e.target.value) || 0) })} /></Field>)}
+            <Button size="sm" disabled={add.isPending} onClick={() => add.mutate()}>Ajouter ({total(f)} présents)</Button>
           </div>
           <ErrorNote error={add.error} />
         </Card>
@@ -44,9 +48,9 @@ export function EffectifsPage() {
             const mine = a.enteredBy === s.me.user.id;
             return (
               <span className="actions">
-                {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <button onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</button>}
-                {!mine && a.status === "soumise" && s.can("transaction.validate1") && <><button onClick={() => act.mutate({ id: a.id, action: "validate1" })}>Valider</button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
-                {!mine && a.status === "validee1" && s.can("transaction.validate2") && <><button onClick={() => act.mutate({ id: a.id, action: "validate2" })}>Valider</button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
+                {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <Button size="sm" onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</Button>}
+                {!mine && a.status === "soumise" && s.can("transaction.validate1") && <><Button size="sm" onClick={() => act.mutate({ id: a.id, action: "validate1" })}>Valider</Button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
+                {!mine && a.status === "validee1" && s.can("transaction.validate2") && <><Button size="sm" onClick={() => act.mutate({ id: a.id, action: "validate2" })}>Valider</Button><ReasonButton danger label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
               </span>);
           } },
         ]} />

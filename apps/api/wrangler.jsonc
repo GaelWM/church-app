@@ -9,7 +9,7 @@
     "run_worker_first": ["/api/*"]
   },
   "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] }, // 18:00 Kinshasa (UTC+1) daily; 1st of month
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_ME", "localConnectionString": "postgres://church:church@localhost:5432/church" }],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_ME", "localConnectionString": "postgres://app_user:app@localhost:54320/church" }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files" }],
   "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_ME" }],
   "send_email": [{ "name": "EMAIL" }],

@@ -4,15 +4,25 @@ Multi-parish church accounting app. See "Church Accounting App — Architecture 
 React 19 + Vite (`apps/web`), Hono on Cloudflare Workers (`apps/api`), Neon Postgres + Drizzle (`packages/db`),
 shared Zod schemas / permissions / money / workflow (`packages/shared`), French email templates (`packages/emails`).
 
-## Local development
+## Run it locally (no Auth0 or Cloudflare account needed)
+Requires Bun and Docker.
 ```bash
-bun install
-eval "$(scripts/test-db.sh)"        # throwaway Postgres in Docker, migrated + seeded (needs Docker)
-bun test                            # unit + API integration tests (RLS, triggers, workflow)
+bun run dev:setup     # Postgres in Docker (port 54320), migrations, categories, demo data, apps/api/.dev.vars
+bun run dev           # API (wrangler dev, :8787) + web (vite, :5173)
+```
+Open **http://localhost:5173** (not :8787, which only serves the production build) and pick a demo user (Administrateur, Caissier, Trésorier, Pasteur). Log out to switch users;
+try the flow: Caissier enters and submits a recette → Trésorier and Pasteur validate it under « À valider » → it appears in the dashboard.
+`bun run dev:db:reset` wipes the local database and re-seeds it. Emails are printed to the API console instead of sent.
+
+The dev login is only honoured when `DEV_AUTH=1` is in the git-ignored `apps/api/.dev.vars` **and** `APP_URL` is `localhost`
+(it is never set in `wrangler.jsonc`); the web side needs `VITE_DEV_AUTH=1`, which only the `dev:local` script sets.
+
+## Tests
+```bash
+eval "$(scripts/test-db.sh)"   # throwaway Postgres in Docker, migrated + seeded
+bun test                       # unit + API integration tests (RLS, triggers, workflow)
 bun run typecheck
 ```
-Run the app: set `apps/web/.env.local` (`VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE`),
-create `apps/api/.dev.vars` (`AUTH0_M2M_CLIENT_ID`, `AUTH0_M2M_CLIENT_SECRET`), then `bun run dev:api` and `bun run dev:web`.
 
 ## First-time setup (needs your accounts)
 1. **Cloudflare**: Workers Paid; create Hyperdrive (Neon URL), R2 bucket `church-files`, KV namespace, Email Service on your domain; put the ids in `apps/api/wrangler.jsonc`.

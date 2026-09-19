@@ -10,6 +10,8 @@ export type Bindings = {
   AUTH0_M2M_CLIENT_ID: string;
   AUTH0_M2M_CLIENT_SECRET: string;
   APP_URL: string;
+  /** Local development only: accept "dev:<auth0Id>" tokens. Set in .dev.vars, never in wrangler.jsonc. */
+  DEV_AUTH?: string;
   MAIL_FROM: string;
   FILES: R2Bucket;
   KV: KVNamespace;

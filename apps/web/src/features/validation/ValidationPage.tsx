@@ -6,7 +6,11 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, StatusBadge } from "../../components/ui";
+import { Card, DataTable, ErrorNote, StatusBadge, PageHeader } from "../../components/common";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** "À valider" inbox: Trésorier sees Soumise (step 1), Pasteur sees Validée 1 (step 2). Batch actions. */
 export function ValidationPage() {
@@ -35,21 +39,21 @@ export function ValidationPage() {
 
   return (
     <>
-      <div className="topbar"><h2>À valider</h2></div>
+      <PageHeader title="À valider" />
       <Card title={`${rows.length} écriture(s) en attente`} actions={
-        <span className="inline-form">
-          <input placeholder="Motif de rejet" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button className="danger" disabled={!selected.size || !reason.trim() || batch.isPending} onClick={() => batch.mutate("reject")}>Rejeter</button>
-          <button disabled={!selected.size || batch.isPending} onClick={() => {
+        <span className="inline-flex items-center gap-1.5">
+          <Input placeholder="Motif de rejet" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Button size="sm" variant="destructive" disabled={!selected.size || !reason.trim() || batch.isPending} onClick={() => batch.mutate("reject")}>Rejeter</Button>
+          <Button size="sm" disabled={!selected.size || batch.isPending} onClick={() => {
             const chosen = rows.filter((t) => selected.has(t.id));
             const actions = new Set(chosen.map(stepFor));
             // A mixed selection is split by state so each row gets the right step.
             actions.forEach((a) => batch.mutate(a));
-          }}>Valider ({selected.size})</button>
+          }}>Valider ({selected.size})</Button>
         </span>
       }>
         <ErrorNote error={batch.error} />
-        {failed.length > 0 && <p className="error">{failed.length} échec(s) : {[...new Set(failed.map((f) => f.error))].join(" ; ")}</p>}
+        {failed.length > 0 && <p className="text-sm text-destructive">{failed.length} échec(s) : {[...new Set(failed.map((f) => f.error))].join(" ; ")}</p>}
         <DataTable<Tx>
           rows={rows}
           select={{ selected, onChange: setSelected }}

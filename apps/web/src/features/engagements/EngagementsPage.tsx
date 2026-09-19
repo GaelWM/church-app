@@ -6,8 +6,12 @@ import { fmtDate, money } from "../../core/format";
 import { useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, Field } from "../../components/ui";
+import { Card, DataTable, ErrorNote, Field, PageHeader } from "../../components/common";
 import { exportPdf } from "../journal/export";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Pledge { id: string; memberId?: string | null; donorName?: string | null; categoryId: string; currency: Currency; amountMinor: string; dueDate?: string | null }
 interface Commitment { id: string; categoryId: string; payee: string; currency: Currency; amountMinor: string; dueDate?: string | null; status: string }
@@ -43,21 +47,21 @@ export function EngagementsPage() {
       rows.map((t) => [fmtDate(t.date), t.reference, recettes.data?.find((x) => x.id === t.categoryId)?.name ?? "", money(t.amountMinor, t.currency)]));
   };
   const set = <T extends object>(o: T, f: (v: T) => void, k: keyof T) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => f({ ...o, [k]: e.target.value });
-  const curSel = (v: string, on: (e: any) => void) => <select value={v} onChange={on}><option>CDF</option><option>USD</option></select>;
+  const curSel = (v: string, on: (e: any) => void) => <NativeSelect value={v} onChange={on}><option>CDF</option><option>USD</option></NativeSelect>;
 
   return (
     <>
-      <div className="topbar"><h2>Engagements</h2></div>
+      <PageHeader title="Engagements" />
       <Card title="Promesses de dons">
         {canEnter && (
           <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Membre"><select value={p.memberId} onChange={set(p, setP, "memberId")}><option value="">—</option>{members.data?.map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</select></Field>
-            <Field label="ou nom du donateur/partenaire"><input value={p.donor} onChange={set(p, setP, "donor")} /></Field>
-            <Field label="Catégorie"><select value={p.categoryId} onChange={set(p, setP, "categoryId")}><option value="">—</option>{recettes.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
+            <Field label="Membre"><NativeSelect value={p.memberId} onChange={set(p, setP, "memberId")}><option value="">—</option>{members.data?.map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</NativeSelect></Field>
+            <Field label="ou nom du donateur/partenaire"><Input value={p.donor} onChange={set(p, setP, "donor")} /></Field>
+            <Field label="Catégorie"><NativeSelect value={p.categoryId} onChange={set(p, setP, "categoryId")}><option value="">—</option>{recettes.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
             <Field label="Devise">{curSel(p.currency, set(p, setP, "currency"))}</Field>
-            <Field label="Montant promis"><input value={p.amount} onChange={set(p, setP, "amount")} inputMode="decimal" /></Field>
-            <Field label="Échéance"><input type="date" value={p.due} onChange={set(p, setP, "due")} /></Field>
-            <button disabled={addPledge.isPending} onClick={() => addPledge.mutate()}>Ajouter</button>
+            <Field label="Montant promis"><Input value={p.amount} onChange={set(p, setP, "amount")} inputMode="decimal" /></Field>
+            <Field label="Échéance"><Input type="date" value={p.due} onChange={set(p, setP, "due")} /></Field>
+            <Button size="sm" disabled={addPledge.isPending} onClick={() => addPledge.mutate()}>Ajouter</Button>
           </div>
         )}
         <ErrorNote error={addPledge.error} />
@@ -75,12 +79,12 @@ export function EngagementsPage() {
       <Card title="Engagements de dépenses">
         {canEnter && (
           <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Bénéficiaire"><input value={c.payee} onChange={set(c, setC, "payee")} /></Field>
-            <Field label="Catégorie"><select value={c.categoryId} onChange={set(c, setC, "categoryId")}><option value="">—</option>{depenses.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
+            <Field label="Bénéficiaire"><Input value={c.payee} onChange={set(c, setC, "payee")} /></Field>
+            <Field label="Catégorie"><NativeSelect value={c.categoryId} onChange={set(c, setC, "categoryId")}><option value="">—</option>{depenses.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
             <Field label="Devise">{curSel(c.currency, set(c, setC, "currency"))}</Field>
-            <Field label="Montant"><input value={c.amount} onChange={set(c, setC, "amount")} inputMode="decimal" /></Field>
-            <Field label="Échéance"><input type="date" value={c.due} onChange={set(c, setC, "due")} /></Field>
-            <button disabled={addCommitment.isPending} onClick={() => addCommitment.mutate()}>Ajouter</button>
+            <Field label="Montant"><Input value={c.amount} onChange={set(c, setC, "amount")} inputMode="decimal" /></Field>
+            <Field label="Échéance"><Input type="date" value={c.due} onChange={set(c, setC, "due")} /></Field>
+            <Button size="sm" disabled={addCommitment.isPending} onClick={() => addCommitment.mutate()}>Ajouter</Button>
           </div>
         )}
         <ErrorNote error={addCommitment.error} />
@@ -88,25 +92,25 @@ export function EngagementsPage() {
           { header: "Bénéficiaire", cell: (x) => x.payee }, { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
           { header: "Montant", align: "right", cell: (x) => money(x.amountMinor, x.currency) }, { header: "Statut", cell: (x) => (x.status === "paid" ? "Payé" : "Ouvert") },
           { header: "", cell: (x) => canEnter && x.status === "open" && (
-            <select defaultValue="" onChange={(e) => e.target.value && markPaid.mutate({ id: x.id, transactionId: e.target.value })}>
+            <NativeSelect defaultValue="" onChange={(e) => e.target.value && markPaid.mutate({ id: x.id, transactionId: e.target.value })}>
               <option value="">Lier à la dépense payée…</option>
               {depenseTx.data?.filter((t) => t.currency === x.currency).map((t) => <option key={t.id} value={t.id}>{t.reference} · {money(t.amountMinor, t.currency)}</option>)}
-            </select>) },
+            </NativeSelect>) },
         ]} />
       </Card>
 
       <Card title="Membres (dîme et relevés de dons)">
         {canEnter && (
           <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Nom complet"><input value={m.fullName} onChange={set(m, setM, "fullName")} /></Field>
-            <Field label="Téléphone"><input value={m.phone} onChange={set(m, setM, "phone")} /></Field>
-            <button disabled={!m.fullName || addMember.isPending} onClick={() => addMember.mutate()}>Ajouter</button>
+            <Field label="Nom complet"><Input value={m.fullName} onChange={set(m, setM, "fullName")} /></Field>
+            <Field label="Téléphone"><Input value={m.phone} onChange={set(m, setM, "phone")} /></Field>
+            <Button size="sm" disabled={!m.fullName || addMember.isPending} onClick={() => addMember.mutate()}>Ajouter</Button>
           </div>
         )}
-        <Field label="Année du relevé"><input value={year} onChange={(e) => setYear(e.target.value)} /></Field>
+        <Field label="Année du relevé"><Input value={year} onChange={(e) => setYear(e.target.value)} /></Field>
         <DataTable<Member> rows={members.data ?? []} columns={[
           { header: "Nom", cell: (x) => x.fullName }, { header: "Téléphone", cell: (x) => x.phone ?? "" },
-          { header: "", cell: (x) => s.can("report.export") && <button className="ghost" onClick={() => statement(x)}>Relevé annuel PDF</button> },
+          { header: "", cell: (x) => s.can("report.export") && <Button size="sm" variant="outline" onClick={() => statement(x)}>Relevé annuel PDF</Button> },
         ]} />
       </Card>
     </>
