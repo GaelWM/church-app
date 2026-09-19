@@ -1,0 +1,19 @@
+{
+  "name": "@church/db",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "generate": "drizzle-kit generate",
+    "migrate": "bun src/migrate.ts",
+    "seed": "bun src/seed.ts"
+  },
+  "dependencies": {
+    "@church/shared": "workspace:*",
+    "drizzle-orm": "^0.36.0",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": { "drizzle-kit": "^0.28.0" }
+}

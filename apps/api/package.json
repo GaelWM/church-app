@@ -1,0 +1,26 @@
+{
+  "name": "@church/api",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@church/db": "workspace:*",
+    "@church/emails": "workspace:*",
+    "@church/shared": "workspace:*",
+    "@hono/zod-validator": "^0.9.1",
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.6.0",
+    "jose": "^5.9.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "postgres": "^3.4.9",
+    "wrangler": "^4.0.0"
+  }
+}

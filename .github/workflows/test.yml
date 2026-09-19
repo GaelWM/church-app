@@ -1,0 +1,25 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: pw, POSTGRES_DB: church }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:pw@localhost:5432/church
+      TEST_ADMIN_DATABASE_URL: postgres://postgres:pw@localhost:5432/church
+      TEST_APP_DATABASE_URL: postgres://app_user:app@localhost:5432/church
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/db migrate && bun run --cwd packages/db seed
+      - run: sudo apt-get install -y postgresql-client && psql "$DATABASE_URL" -f packages/db/test-setup.sql
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run --cwd apps/web build

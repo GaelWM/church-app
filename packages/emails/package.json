@@ -1,0 +1,1 @@
+{ "name": "@church/emails", "private": true, "type": "module", "main": "src/index.ts", "scripts": { "typecheck": "tsc -p ." } }

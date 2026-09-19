@@ -1,0 +1,34 @@
+{
+  "name": "@church/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@auth0/auth0-react": "^2.2.4",
+    "@church/shared": "workspace:*",
+    "@hookform/resolvers": "^3.9.0",
+    "@tanstack/react-query": "^5.59.0",
+    "i18next": "^23.16.0",
+    "idb-keyval": "^6.2.1",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.53.0",
+    "react-i18next": "^15.0.3",
+    "react-router-dom": "^6.27.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
