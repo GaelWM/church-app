@@ -1,43 +1,36 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
 import { useApi } from "../../core/api";
 import { fmtDate, today } from "../../core/format";
 import { useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
-import { Card, DataTable, ErrorNote, Field, ReasonButton, StatusBadge, PageHeader } from "../../components/common";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface Att { id: string; serviceDate: string; serviceType: string; hommes: number; femmes: number; jeunes: number; enfants: number; visiteurs: number; status: any; enteredBy: string }
 const GROUPS = ["hommes", "femmes", "jeunes", "enfants", "visiteurs"] as const;
+const count = z.coerce.number({ message: "Nombre requis" }).int("Nombre entier").min(0, "Minimum 0");
+const schema = z.object({ serviceDate: z.string().min(1, "Date requise"), serviceType: z.string().min(1, "Culte requis"), hommes: count, femmes: count, jeunes: count, enfants: count, visiteurs: count });
+type Values = z.input<typeof schema>;
 
 export function EffectifsPage() {
   const api = useApi();
   const s = useSession();
   const invalidate = useInvalidateLedger();
   const canEnter = s.can("transaction.create") && !s.consolidated;
+  const [open, setOpen] = useState(false);
   const list = useQuery({ queryKey: useScopedKey("attendance"), queryFn: () => api.get<Att[]>("/engagements/attendance") });
-  const [f, setF] = useState({ serviceDate: today(), serviceType: "Culte du dimanche", hommes: 0, femmes: 0, jeunes: 0, enfants: 0, visiteurs: 0 });
-  const add = useMutation({ mutationFn: () => api.post("/engagements/attendance", f), onSuccess: () => { setF({ ...f, hommes: 0, femmes: 0, jeunes: 0, enfants: 0, visiteurs: 0 }); invalidate(); } });
   const act = useMutation({ mutationFn: (v: { id: string; action: string; comment?: string }) => api.post(`/engagements/attendance/${v.id}/${v.action}`, { comment: v.comment }), onSuccess: invalidate });
-  const total = (a: Att | typeof f) => GROUPS.reduce((n, g) => n + a[g], 0);
+  const total = (a: Att) => GROUPS.reduce((n, g) => n + a[g], 0);
 
   return (
     <>
-      <PageHeader title="Effectifs" />
-      {canEnter && (
-        <Card title="Nouveau comptage">
-          <div className="form-grid">
-            <Field label="Date"><Input type="date" value={f.serviceDate} onChange={(e) => setF({ ...f, serviceDate: e.target.value })} /></Field>
-            <Field label="Culte"><Input value={f.serviceType} onChange={(e) => setF({ ...f, serviceType: e.target.value })} /></Field>
-            {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)}><Input type="number" min={0} value={f[g]} onChange={(e) => setF({ ...f, [g]: Math.max(0, Number(e.target.value) || 0) })} /></Field>)}
-            <Button size="sm" disabled={add.isPending} onClick={() => add.mutate()}>Ajouter ({total(f)} présents)</Button>
-          </div>
-          <ErrorNote error={add.error} />
-        </Card>
-      )}
+      <PageHeader title="Effectifs">{canEnter && <Button onClick={() => setOpen(true)}><Plus /> Nouveau comptage</Button>}</PageHeader>
       <Card title="Comptages">
         <ErrorNote error={act.error} />
         <DataTable<Att> rows={list.data ?? []} columns={[
@@ -55,6 +48,31 @@ export function EffectifsPage() {
           } },
         ]} />
       </Card>
+      <ModalForm open={open} onOpenChange={setOpen} title="Nouveau comptage" description="Effectifs présents au culte.">
+        <AttendanceForm onClose={() => setOpen(false)} />
+      </ModalForm>
     </>
+  );
+}
+
+function AttendanceForm({ onClose }: { onClose: () => void }) {
+  const api = useApi();
+  const invalidate = useInvalidateLedger();
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<Values, unknown, z.output<typeof schema>>({
+    resolver: zodResolver(schema), defaultValues: { serviceDate: today(), serviceType: "Culte du dimanche", hommes: 0, femmes: 0, jeunes: 0, enfants: 0, visiteurs: 0 },
+  });
+  const total = GROUPS.reduce((n, g) => n + (Number(watch(g)) || 0), 0);
+  const add = useMutation({ mutationFn: (v: z.output<typeof schema>) => api.post("/engagements/attendance", v), onSuccess: () => { invalidate(); onClose(); } });
+  return (
+    <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
+      <FormGrid>
+        <Field label="Date" error={errors.serviceDate?.message}><Input type="date" {...register("serviceDate")} /></Field>
+        <Field label="Culte" error={errors.serviceType?.message}><Input {...register("serviceType")} /></Field>
+        {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)} error={errors[g]?.message}><Input type="number" min={0} {...register(g)} /></Field>)}
+        <p className="muted self-end pb-2">Total : <b>{total}</b> présents</p>
+      </FormGrid>
+      <div className="mt-3"><ErrorNote error={add.error} /></div>
+      <FormFooter pending={add.isPending} onCancel={onClose} />
+    </form>
   );
 }

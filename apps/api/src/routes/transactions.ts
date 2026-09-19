@@ -4,7 +4,7 @@ import { z } from "zod";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { categories, transactionEvents, transactions, users, type Tx } from "@church/db";
-import { batchActionSchema, isEditable, rejectSchema, transactionInputSchema, type TxAction } from "@church/shared";
+import { batchActionSchema, can, isEditable, rejectSchema, transactionInputSchema, type TxAction } from "@church/shared";
 import { rejected } from "@church/emails";
 import type { AppEnv } from "../env";
 import { parishScope, requireParish, requirePerm } from "../middleware/auth";
@@ -162,20 +162,26 @@ export const transactionRoutes = new Hono<AppEnv>()
     return c.body(null, 204);
   })
 
+  // Batch actions for the À valider inboxes. Registered BEFORE "/:id/<action>" so "batch" is never read as an id.
+  .post("/batch/:action", zValidator("json", batchActionSchema.extend({ comment: z.string().optional() })), async (c) => {
+    const action = c.req.param("action") as TxAction;
+    if (!["submit", "validate1", "validate2", "reject"].includes(action)) throw new HTTPException(404);
+    const roles = c.get("roles");
+    const allowed = action === "submit" ? can(roles, "transaction.create")
+      : action === "validate1" ? can(roles, "transaction.validate1")
+      : action === "validate2" ? can(roles, "transaction.validate2")
+      : can(roles, "transaction.validate1") || can(roles, "transaction.validate2");
+    if (!allowed) throw new HTTPException(403, { message: "Permission refusée" });
+    const { ids, comment } = c.req.valid("json");
+    const results = await run(c, (tx) => applyBatch(tx, actorOf(c), ids, action, comment));
+    return c.json({ results });
+  })
+
   // Workflow actions.
   .post("/:id/submit", requirePerm("transaction.create"), (c) => act(c, "submit"))
   .post("/:id/validate1", requirePerm("transaction.validate1"), (c) => act(c, "validate1"))
   .post("/:id/validate2", requirePerm("transaction.validate2"), (c) => act(c, "validate2"))
   .post("/:id/reject", zValidator("json", rejectSchema), async (c) => act(c, "reject", c.req.valid("json").comment))
-
-  // Batch validation for the À valider inboxes.
-  .post("/batch/:action", zValidator("json", batchActionSchema.extend({ comment: z.string().optional() })), async (c) => {
-    const action = c.req.param("action") as TxAction;
-    if (!["submit", "validate1", "validate2", "reject"].includes(action)) throw new HTTPException(404);
-    const { ids, comment } = c.req.valid("json");
-    const results = await run(c, (tx) => applyBatch(tx, actorOf(c), ids, action, comment));
-    return c.json({ results });
-  })
 
   // Contre-passation: reversing entry linked to a validated original.
   .post("/:id/reverse", requirePerm("transaction.create"), zValidator("json", rejectSchema), async (c) => {

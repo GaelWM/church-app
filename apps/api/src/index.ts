@@ -53,6 +53,9 @@ export function createApp(deps: Deps = {}) {
       // Postgres guard triggers raise readable French messages: surface them as 422.
       if (/Écriture validée|Période clôturée|en ajout seul/.test(msg)) return c.json({ error: msg.replace(/^.*?(Écriture|Période|transaction)/, "$1") }, 422);
       console.error(err);
+      // Local development: say what is wrong instead of a generic message.
+      if (devAuthEnabled(c.env) && /ECONNREFUSED|CONNECT_TIMEOUT|CONNECTION_CLOSED|Failed query|connect/i.test(msg))
+        return c.json({ error: "Base de données inaccessible. Lancez « bun run dev:setup »." }, 503);
       return c.json({ error: "Erreur interne" }, 500);
     });
   return app;

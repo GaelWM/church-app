@@ -6,7 +6,7 @@ import { fmtDate, money } from "../../core/format";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, StatusBadge, PageHeader } from "../../components/common";
+import { Card, DataTable, ErrorNote, StatusBadge, PageHeader, ReasonDialog } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -23,13 +23,13 @@ export function ValidationPage() {
   const accounts = useAccounts();
   const categories = useCategories();
   const [selected, setSelected] = useState(new Set<string>());
-  const [reason, setReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
   const [results, setResults] = useState<Array<{ id: string; ok: boolean; error?: string }>>([]);
 
   const list = useQuery({ queryKey: useScopedKey("inbox", status), queryFn: () => api.get<Tx[]>("/transactions", { status }), enabled: !!status });
   const batch = useMutation({
-    mutationFn: (action: string) => api.post<{ results: typeof results }>(`/transactions/batch/${action}`, { ids: [...selected], comment: reason || undefined }),
-    onSuccess: (r) => { setResults(r.results); setSelected(new Set()); setReason(""); invalidate(); },
+    mutationFn: ({ action, comment }: { action: string; comment?: string }) => api.post<{ results: typeof results }>(`/transactions/batch/${action}`, { ids: [...selected], comment }),
+    onSuccess: (r) => { setResults(r.results); setSelected(new Set()); invalidate(); },
   });
 
   // Nobody validates what they entered: those rows are shown but cannot be selected.
@@ -42,13 +42,11 @@ export function ValidationPage() {
       <PageHeader title="À valider" />
       <Card title={`${rows.length} écriture(s) en attente`} actions={
         <span className="inline-flex items-center gap-1.5">
-          <Input placeholder="Motif de rejet" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <Button size="sm" variant="destructive" disabled={!selected.size || !reason.trim() || batch.isPending} onClick={() => batch.mutate("reject")}>Rejeter</Button>
-          <Button size="sm" disabled={!selected.size || batch.isPending} onClick={() => {
+          <Button variant="destructive" disabled={!selected.size || batch.isPending} onClick={() => setRejecting(true)}>Rejeter ({selected.size})</Button>
+          <Button disabled={!selected.size || batch.isPending} onClick={() => {
             const chosen = rows.filter((t) => selected.has(t.id));
-            const actions = new Set(chosen.map(stepFor));
             // A mixed selection is split by state so each row gets the right step.
-            actions.forEach((a) => batch.mutate(a));
+            new Set(chosen.map(stepFor)).forEach((action) => batch.mutate({ action }));
           }}>Valider ({selected.size})</Button>
         </span>
       }>
@@ -67,6 +65,8 @@ export function ValidationPage() {
           ]}
         />
       </Card>
+      <ReasonDialog open={rejecting} onOpenChange={setRejecting} title={`Rejeter ${selected.size} écriture(s)`} label="Motif du rejet (envoyé au caissier)" confirmLabel="Rejeter" destructive
+        onConfirm={(comment) => batch.mutate({ action: "reject", comment })} />
     </>
   );
 }

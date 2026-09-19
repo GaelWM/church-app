@@ -1,21 +1,26 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { parseAmount, type Currency } from "@church/shared";
+import { Plus } from "lucide-react";
+import { CURRENCIES, parseAmount, type Currency } from "@church/shared";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader } from "@/components/common";
 import { useApi } from "../../core/api";
+import { amountField, requiredSelect } from "../../core/forms";
 import { fmtDate, money } from "../../core/format";
 import { useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
-import { Card, DataTable, ErrorNote, Field, PageHeader } from "../../components/common";
 import { exportPdf } from "../journal/export";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface Pledge { id: string; memberId?: string | null; donorName?: string | null; categoryId: string; currency: Currency; amountMinor: string; dueDate?: string | null }
 interface Commitment { id: string; categoryId: string; payee: string; currency: Currency; amountMinor: string; dueDate?: string | null; status: string }
 interface Member { id: string; fullName: string; phone?: string | null }
+type Dialog = "pledge" | "commitment" | "member" | null;
 
 export function EngagementsPage() {
   const api = useApi();
@@ -23,48 +28,28 @@ export function EngagementsPage() {
   const invalidate = useInvalidateLedger();
   const canEnter = s.can("transaction.create") && !s.consolidated;
   const recettes = useCategories("recette");
-  const depenses = useCategories("depense");
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [year, setYear] = useState(String(new Date().getFullYear()));
   const pledges = useQuery({ queryKey: useScopedKey("pledges"), queryFn: () => api.get<Pledge[]>("/engagements/pledges") });
   const commitments = useQuery({ queryKey: useScopedKey("commitments"), queryFn: () => api.get<Commitment[]>("/engagements/commitments") });
   const members = useQuery({ queryKey: useScopedKey("members"), queryFn: () => api.get<Member[]>("/engagements/members") });
   const txs = useQuery({ queryKey: useScopedKey("tx", "recette"), queryFn: () => api.get<Tx[]>("/transactions", { kind: "recette" }) });
-  const received = (id: string) => (txs.data ?? []).filter((t) => t.pledgeId === id && t.status === "validee").reduce((a, t) => a + BigInt(t.amountMinor), 0n);
-
-  const [p, setP] = useState({ donor: "", memberId: "", categoryId: "", currency: "CDF", amount: "", due: "" });
-  const [c, setC] = useState({ payee: "", categoryId: "", currency: "CDF", amount: "", due: "" });
-  const [m, setM] = useState({ fullName: "", phone: "" });
-  const [year, setYear] = useState(String(new Date().getFullYear()));
-
-  const addPledge = useMutation({ mutationFn: () => api.post("/engagements/pledges", { donorName: p.donor || undefined, memberId: p.memberId || undefined, categoryId: p.categoryId, currency: p.currency, amountMinor: parseAmount(p.amount).toString(), dueDate: p.due || undefined }), onSuccess: () => { setP({ ...p, donor: "", amount: "" }); invalidate(); } });
-  const addCommitment = useMutation({ mutationFn: () => api.post("/engagements/commitments", { payee: c.payee, categoryId: c.categoryId, currency: c.currency, amountMinor: parseAmount(c.amount).toString(), dueDate: c.due || undefined }), onSuccess: () => { setC({ ...c, payee: "", amount: "" }); invalidate(); } });
-  const addMember = useMutation({ mutationFn: () => api.post("/engagements/members", { fullName: m.fullName, phone: m.phone || undefined }), onSuccess: () => { setM({ fullName: "", phone: "" }); invalidate(); } });
+  const depenseTx = useQuery({ queryKey: useScopedKey("tx", "depense", "validee"), queryFn: () => api.get<Tx[]>("/transactions", { kind: "depense", status: "validee" }) });
+  const depenses = useCategories("depense");
   const markPaid = useMutation({ mutationFn: (v: { id: string; transactionId: string }) => api.post(`/engagements/commitments/${v.id}/paid`, { transactionId: v.transactionId }), onSuccess: invalidate });
-  const depenseTx = useQuery({ queryKey: useScopedKey("tx", "depense"), queryFn: () => api.get<Tx[]>("/transactions", { kind: "depense", status: "validee" }) });
+  const received = (id: string) => (txs.data ?? []).filter((t) => t.pledgeId === id && t.status === "validee").reduce((a, t) => a + BigInt(t.amountMinor), 0n);
+  const close = () => setDialog(null);
 
   const statement = (member: Member) => {
     const rows = (txs.data ?? []).filter((t) => t.memberId === member.id && t.status === "validee" && t.date.startsWith(year));
     exportPdf(`Relevé de dons ${year} — ${member.fullName}`, ["Date", "Référence", "Catégorie", "Montant"],
       rows.map((t) => [fmtDate(t.date), t.reference, recettes.data?.find((x) => x.id === t.categoryId)?.name ?? "", money(t.amountMinor, t.currency)]));
   };
-  const set = <T extends object>(o: T, f: (v: T) => void, k: keyof T) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => f({ ...o, [k]: e.target.value });
-  const curSel = (v: string, on: (e: any) => void) => <NativeSelect value={v} onChange={on}><option>CDF</option><option>USD</option></NativeSelect>;
 
   return (
     <>
       <PageHeader title="Engagements" />
-      <Card title="Promesses de dons">
-        {canEnter && (
-          <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Membre"><NativeSelect value={p.memberId} onChange={set(p, setP, "memberId")}><option value="">—</option>{members.data?.map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</NativeSelect></Field>
-            <Field label="ou nom du donateur/partenaire"><Input value={p.donor} onChange={set(p, setP, "donor")} /></Field>
-            <Field label="Catégorie"><NativeSelect value={p.categoryId} onChange={set(p, setP, "categoryId")}><option value="">—</option>{recettes.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
-            <Field label="Devise">{curSel(p.currency, set(p, setP, "currency"))}</Field>
-            <Field label="Montant promis"><Input value={p.amount} onChange={set(p, setP, "amount")} inputMode="decimal" /></Field>
-            <Field label="Échéance"><Input type="date" value={p.due} onChange={set(p, setP, "due")} /></Field>
-            <Button size="sm" disabled={addPledge.isPending} onClick={() => addPledge.mutate()}>Ajouter</Button>
-          </div>
-        )}
-        <ErrorNote error={addPledge.error} />
+      <Card title="Promesses de dons" actions={canEnter && <Button size="sm" onClick={() => setDialog("pledge")}><Plus /> Promesse</Button>}>
         <DataTable<Pledge> rows={pledges.data ?? []} columns={[
           { header: "Donateur", cell: (x) => x.donorName ?? members.data?.find((mm) => mm.id === x.memberId)?.fullName ?? "" },
           { header: "Catégorie", cell: (x) => recettes.data?.find((r) => r.id === x.categoryId)?.name ?? "" },
@@ -76,43 +61,111 @@ export function EngagementsPage() {
         <p className="muted">Chaque paiement est une recette normale liée à la promesse (champ « Promesse liée » dans Recettes).</p>
       </Card>
 
-      <Card title="Engagements de dépenses">
-        {canEnter && (
-          <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Bénéficiaire"><Input value={c.payee} onChange={set(c, setC, "payee")} /></Field>
-            <Field label="Catégorie"><NativeSelect value={c.categoryId} onChange={set(c, setC, "categoryId")}><option value="">—</option>{depenses.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
-            <Field label="Devise">{curSel(c.currency, set(c, setC, "currency"))}</Field>
-            <Field label="Montant"><Input value={c.amount} onChange={set(c, setC, "amount")} inputMode="decimal" /></Field>
-            <Field label="Échéance"><Input type="date" value={c.due} onChange={set(c, setC, "due")} /></Field>
-            <Button size="sm" disabled={addCommitment.isPending} onClick={() => addCommitment.mutate()}>Ajouter</Button>
-          </div>
-        )}
-        <ErrorNote error={addCommitment.error} />
+      <Card title="Engagements de dépenses" actions={canEnter && <Button size="sm" onClick={() => setDialog("commitment")}><Plus /> Engagement</Button>}>
+        <ErrorNote error={markPaid.error} />
         <DataTable<Commitment> rows={commitments.data ?? []} columns={[
-          { header: "Bénéficiaire", cell: (x) => x.payee }, { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
+          { header: "Bénéficiaire", cell: (x) => x.payee }, { header: "Catégorie", cell: (x) => depenses.data?.find((d) => d.id === x.categoryId)?.name ?? "" },
+          { header: "Échéance", cell: (x) => fmtDate(x.dueDate) },
           { header: "Montant", align: "right", cell: (x) => money(x.amountMinor, x.currency) }, { header: "Statut", cell: (x) => (x.status === "paid" ? "Payé" : "Ouvert") },
           { header: "", cell: (x) => canEnter && x.status === "open" && (
-            <NativeSelect defaultValue="" onChange={(e) => e.target.value && markPaid.mutate({ id: x.id, transactionId: e.target.value })}>
+            <NativeSelect size="sm" defaultValue="" onChange={(e) => e.target.value && markPaid.mutate({ id: x.id, transactionId: e.target.value })}>
               <option value="">Lier à la dépense payée…</option>
               {depenseTx.data?.filter((t) => t.currency === x.currency).map((t) => <option key={t.id} value={t.id}>{t.reference} · {money(t.amountMinor, t.currency)}</option>)}
             </NativeSelect>) },
         ]} />
       </Card>
 
-      <Card title="Membres (dîme et relevés de dons)">
-        {canEnter && (
-          <div className="form-grid" style={{ marginBottom: 12 }}>
-            <Field label="Nom complet"><Input value={m.fullName} onChange={set(m, setM, "fullName")} /></Field>
-            <Field label="Téléphone"><Input value={m.phone} onChange={set(m, setM, "phone")} /></Field>
-            <Button size="sm" disabled={!m.fullName || addMember.isPending} onClick={() => addMember.mutate()}>Ajouter</Button>
-          </div>
-        )}
-        <Field label="Année du relevé"><Input value={year} onChange={(e) => setYear(e.target.value)} /></Field>
+      <Card title="Membres (dîme et relevés de dons)" actions={
+        <span className="flex items-center gap-2">
+          <Input className="h-7 w-20" aria-label="Année du relevé" value={year} onChange={(e) => setYear(e.target.value)} />
+          {canEnter && <Button size="sm" onClick={() => setDialog("member")}><Plus /> Membre</Button>}
+        </span>
+      }>
         <DataTable<Member> rows={members.data ?? []} columns={[
           { header: "Nom", cell: (x) => x.fullName }, { header: "Téléphone", cell: (x) => x.phone ?? "" },
           { header: "", cell: (x) => s.can("report.export") && <Button size="sm" variant="outline" onClick={() => statement(x)}>Relevé annuel PDF</Button> },
         ]} />
       </Card>
+
+      <ModalForm open={dialog === "pledge"} onOpenChange={(o) => !o && close()} title="Nouvelle promesse de don"><PledgeForm onClose={close} /></ModalForm>
+      <ModalForm open={dialog === "commitment"} onOpenChange={(o) => !o && close()} title="Nouvel engagement de dépense"><CommitmentForm onClose={close} /></ModalForm>
+      <ModalForm open={dialog === "member"} onOpenChange={(o) => !o && close()} title="Nouveau membre" className="sm:max-w-md"><MemberForm onClose={close} /></ModalForm>
     </>
+  );
+}
+
+const currency = z.enum(CURRENCIES);
+
+const pledgeSchema = z.object({
+  memberId: z.string().optional(), donorName: z.string().optional(), categoryId: requiredSelect("Catégorie requise"),
+  currency, amount: amountField, dueDate: z.string().optional(),
+}).refine((v) => v.memberId || v.donorName?.trim(), { path: ["donorName"], message: "Choisissez un membre ou saisissez un nom" });
+
+function PledgeForm({ onClose }: { onClose: () => void }) {
+  const api = useApi();
+  const invalidate = useInvalidateLedger();
+  const recettes = useCategories("recette");
+  const members = useQuery({ queryKey: useScopedKey("members"), queryFn: () => api.get<Member[]>("/engagements/members") });
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof pledgeSchema>>({ resolver: zodResolver(pledgeSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "" } });
+  const add = useMutation({
+    mutationFn: (v: z.infer<typeof pledgeSchema>) => api.post("/engagements/pledges", { donorName: v.donorName || undefined, memberId: v.memberId || undefined, categoryId: v.categoryId, currency: v.currency, amountMinor: parseAmount(v.amount).toString(), dueDate: v.dueDate || undefined }),
+    onSuccess: () => { invalidate(); onClose(); },
+  });
+  return (
+    <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
+      <FormGrid>
+        <Field label="Membre"><NativeSelect {...register("memberId")}><option value="">—</option>{members.data?.map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</NativeSelect></Field>
+        <Field label="ou nom du donateur / partenaire" error={errors.donorName?.message}><Input {...register("donorName")} /></Field>
+        <Field label="Catégorie" error={errors.categoryId?.message}><NativeSelect {...register("categoryId")}><option value="">—</option>{recettes.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
+        <Field label="Devise"><NativeSelect {...register("currency")}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</NativeSelect></Field>
+        <Field label="Montant promis" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
+        <Field label="Échéance"><Input type="date" {...register("dueDate")} /></Field>
+      </FormGrid>
+      <div className="mt-3"><ErrorNote error={add.error} /></div>
+      <FormFooter pending={add.isPending} onCancel={onClose} />
+    </form>
+  );
+}
+
+const commitmentSchema = z.object({ payee: z.string().trim().min(1, "Bénéficiaire requis"), categoryId: requiredSelect("Catégorie requise"), currency, amount: amountField, dueDate: z.string().optional() });
+
+function CommitmentForm({ onClose }: { onClose: () => void }) {
+  const api = useApi();
+  const invalidate = useInvalidateLedger();
+  const depenses = useCategories("depense");
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof commitmentSchema>>({ resolver: zodResolver(commitmentSchema), defaultValues: { currency: "CDF", categoryId: "", amount: "", payee: "" } });
+  const add = useMutation({
+    mutationFn: (v: z.infer<typeof commitmentSchema>) => api.post("/engagements/commitments", { payee: v.payee, categoryId: v.categoryId, currency: v.currency, amountMinor: parseAmount(v.amount).toString(), dueDate: v.dueDate || undefined }),
+    onSuccess: () => { invalidate(); onClose(); },
+  });
+  return (
+    <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
+      <FormGrid>
+        <Field label="Bénéficiaire" error={errors.payee?.message}><Input {...register("payee")} /></Field>
+        <Field label="Catégorie" error={errors.categoryId?.message}><NativeSelect {...register("categoryId")}><option value="">—</option>{depenses.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</NativeSelect></Field>
+        <Field label="Devise"><NativeSelect {...register("currency")}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</NativeSelect></Field>
+        <Field label="Montant" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
+        <Field label="Échéance"><Input type="date" {...register("dueDate")} /></Field>
+      </FormGrid>
+      <div className="mt-3"><ErrorNote error={add.error} /></div>
+      <FormFooter pending={add.isPending} onCancel={onClose} />
+    </form>
+  );
+}
+
+const memberSchema = z.object({ fullName: z.string().trim().min(1, "Nom requis"), phone: z.string().optional() });
+
+function MemberForm({ onClose }: { onClose: () => void }) {
+  const api = useApi();
+  const invalidate = useInvalidateLedger();
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof memberSchema>>({ resolver: zodResolver(memberSchema) });
+  const add = useMutation({ mutationFn: (v: z.infer<typeof memberSchema>) => api.post("/engagements/members", { fullName: v.fullName, phone: v.phone || undefined }), onSuccess: () => { invalidate(); onClose(); } });
+  return (
+    <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate className="space-y-3">
+      <Field label="Nom complet" error={errors.fullName?.message}><Input autoFocus {...register("fullName")} /></Field>
+      <Field label="Téléphone"><Input {...register("phone")} /></Field>
+      <ErrorNote error={add.error} />
+      <FormFooter pending={add.isPending} onCancel={onClose} />
+    </form>
   );
 }

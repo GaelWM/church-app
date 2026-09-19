@@ -39,7 +39,8 @@ d("API end to end (real Postgres, RLS + triggers)", () => {
     await mk("caissierB", ids.parishB!, "caissier");
     const [acct] = await sql`insert into accounts (parish_id, type, currency, name) values (${ids.parishA!}, 'caisse', 'CDF', 'Caisse CDF') returning id`;
     const [bank] = await sql`insert into accounts (parish_id, type, currency, name) values (${ids.parishA!}, 'banque', 'CDF', 'Banque CDF') returning id`;
-    ids.acct = acct!.id; ids.bank = bank!.id;
+    const [acct2] = await sql`insert into accounts (parish_id, type, currency, name) values (${ids.parishA!}, 'caisse', 'CDF', 'Caisse batch') returning id`;
+    ids.acct = acct!.id; ids.bank = bank!.id; ids.acctBatch = acct2!.id;
     await sql`insert into exchange_rates (rate_cdf_per_usd, effective_from) values ('2800', '2020-01-01')`;
     const cats = await sql`select id, kind, name from categories`;
     ids.recette = cats.find((c) => c.name === "Offrande ordinaire")!.id;
@@ -115,6 +116,28 @@ d("API end to end (real Postgres, RLS + triggers)", () => {
     expect((await call(ids.tok_caissier!, "POST", `/transactions/${t.id}/submit`)).status).toBe(200);
     const detail = await json(await call(ids.tok_caissier!, "GET", `/transactions/${t.id}`));
     expect(detail.events.map((e: any) => e.toStatus)).toEqual(["brouillon", "soumise", "rejetee", "soumise"]);
+  });
+
+  test("batch actions: validate several entries at once and reject with a reason", async () => {
+    const mk = async (amount: string) => {
+      // separate account so balances asserted by other tests are unaffected
+      const t = await json(await call(ids.tok_caissier!, "POST", "/transactions", { ...entry("recette", amount, "2026-06-02"), accountId: ids.acctBatch }));
+      await call(ids.tok_caissier!, "POST", `/transactions/${t.id}/submit`);
+      return t.id as string;
+    };
+    const [a, b, c] = [await mk("1000"), await mk("2000"), await mk("3000")];
+    let r = await call(ids.tok_tresorier!, "POST", "/transactions/batch/validate1", { ids: [a, b, c] });
+    expect(r.status).toBe(200);
+    expect((await json(r)).results.every((x: any) => x.ok)).toBe(true);
+    r = await call(ids.tok_pasteur!, "POST", "/transactions/batch/reject", { ids: [c], comment: "Doublon" });
+    expect(r.status).toBe(200);
+    expect((await json(r)).results[0].ok).toBe(true);
+    r = await call(ids.tok_pasteur!, "POST", "/transactions/batch/validate2", { ids: [a, b, c] });
+    const results = (await json(r)).results as Array<{ id: string; ok: boolean }>;
+    expect(results.filter((x) => x.ok).map((x) => x.id).sort()).toEqual([a, b].sort()); // c was rejected
+    expect((await call(ids.tok_caissier!, "POST", "/transactions/batch/validate1", { ids: [a] })).status).toBe(403);
+    const rejected = await json(await call(ids.tok_caissier!, "GET", `/transactions/${c}`));
+    expect(rejected.status).toBe("rejetee");
   });
 
   test("administrateur is read-only on money", async () => {

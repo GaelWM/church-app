@@ -1,11 +1,15 @@
 import { useState, type ReactNode } from "react";
 import { AlertCircle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { parseAmount, STATUS_LABELS, type TxStatus } from "@church/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card as ShadCard, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -47,11 +51,14 @@ export function MoneyInput({ value, onChange, placeholder }: { value: string; on
 }
 
 export function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
+  // The control is nested inside the <label>, so the label text names it (click-to-focus, screen readers).
   return (
     <div className="flex flex-col gap-1.5 [&_[data-slot=native-select-wrapper]]:w-full">
-      <Label className="text-muted-foreground">{label}</Label>
-      {children}
-      {error && <small className="text-destructive">{error}</small>}
+      <Label className="flex-col items-stretch gap-1.5 text-muted-foreground">
+        <span>{label}</span>
+        {children}
+      </Label>
+      {error && <small role="alert" className="text-destructive">{error}</small>}
     </div>
   );
 }
@@ -123,16 +130,71 @@ export function PageHeader({ title, children }: { title: ReactNode; children?: R
   return <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">{title}</h2>{children}</div>;
 }
 
-/** Prompt for a mandatory reason (rejection, reversal). */
+/** Dialog shell for forms. The form component goes inside, so it remounts (fresh state) on every open. */
+export function ModalForm({ open, onOpenChange, title, description, children, className }: {
+  open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode; className?: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={cn("max-h-[90vh] overflow-y-auto sm:max-w-xl", className)}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Two-column responsive field grid used inside modal forms. */
+export function FormGrid({ children }: { children: ReactNode }) {
+  return <div className="grid gap-3 sm:grid-cols-2 [&>.col-span-full]:sm:col-span-2">{children}</div>;
+}
+
+export function FormFooter({ pending, submitLabel = "Enregistrer", onCancel, extra }: { pending?: boolean; submitLabel?: string; onCancel: () => void; extra?: ReactNode }) {
+  return (
+    <DialogFooter className="mt-4">
+      <Button type="button" variant="ghost" onClick={onCancel}>Annuler</Button>
+      {extra}
+      <Button type="submit" disabled={pending}>{submitLabel}</Button>
+    </DialogFooter>
+  );
+}
+
+const reasonSchema = z.object({ reason: z.string().trim().min(1, "Le motif est obligatoire") });
+
+function ReasonForm({ label, confirmLabel, destructive, onConfirm, onClose }: { label: string; confirmLabel: string; destructive?: boolean; onConfirm: (reason: string) => void; onClose: () => void }) {
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof reasonSchema>>({ resolver: zodResolver(reasonSchema) });
+  return (
+    <form onSubmit={handleSubmit((v) => { onConfirm(v.reason); onClose(); })} className="space-y-3">
+      <Field label={label} error={errors.reason?.message}><Input autoFocus {...register("reason")} /></Field>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+        <Button type="submit" variant={destructive ? "destructive" : "default"}>{confirmLabel}</Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Modal asking for a mandatory reason (rejection, reversal). */
+export function ReasonDialog({ open, onOpenChange, title, label = "Motif (obligatoire)", confirmLabel = "Confirmer", destructive, onConfirm }: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: string; label?: string; confirmLabel?: string; destructive?: boolean; onConfirm: (reason: string) => void;
+}) {
+  return (
+    <ModalForm open={open} onOpenChange={onOpenChange} title={title} className="sm:max-w-md">
+      <ReasonForm label={label} confirmLabel={confirmLabel} destructive={destructive} onConfirm={onConfirm} onClose={() => onOpenChange(false)} />
+    </ModalForm>
+  );
+}
+
+/** Button that opens a reason dialog. */
 export function ReasonButton({ label, onConfirm, danger }: { label: string; onConfirm: (reason: string) => void; danger?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  if (!open) return <Button size="sm" variant={danger ? "destructive" : "default"} onClick={() => setOpen(true)}>{label}</Button>;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <Input autoFocus className="h-7 w-44" placeholder="Motif (obligatoire)" value={reason} onChange={(e) => setReason(e.target.value)} />
-      <Button size="sm" disabled={!reason.trim()} onClick={() => { onConfirm(reason.trim()); setOpen(false); setReason(""); }}>Confirmer</Button>
-      <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Annuler</Button>
-    </span>
+    <>
+      <Button size="sm" variant={danger ? "destructive" : "default"} onClick={() => setOpen(true)}>{label}</Button>
+      <ReasonDialog open={open} onOpenChange={setOpen} title={label} destructive={danger} onConfirm={onConfirm} />
+    </>
   );
 }
