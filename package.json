@@ -15,7 +15,8 @@
     "dev:setup": "scripts/dev-setup.sh",
     "dev": "bun run scripts/dev.ts",
     "dev:db:reset": "docker compose down -v && scripts/dev-setup.sh",
-    "smoke": "bun run scripts/smoke.ts"
+    "smoke": "bun run scripts/smoke.ts",
+    "dev:auth0": "bun run scripts/dev.ts --auth0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

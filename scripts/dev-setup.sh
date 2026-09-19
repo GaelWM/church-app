@@ -9,9 +9,13 @@ bun install
 (cd packages/db && bun src/migrate.ts && bun src/seed.ts && bun src/dev-seed.ts)
 (cd packages/db && APP_DB_PASSWORD=app bun src/grant-app-role.ts)
 # Local-only config (git-ignored). DEV_AUTH is never set in wrangler.jsonc.
-cat > apps/api/.dev.vars <<'VARS'
+# AUTH0_DOMAIN / AUTH0_AUDIENCE let the local Worker verify REAL Auth0 tokens too (bun run dev:auth0);
+# override them by exporting the variables before running this script.
+cat > apps/api/.dev.vars <<VARS
 DEV_AUTH=1
 APP_URL=http://localhost:5173
+AUTH0_DOMAIN=${AUTH0_DOMAIN:-church-app.us.auth0.com}
+AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-https://church-accounting/api}
 AUTH0_M2M_CLIENT_ID=unused-locally
 AUTH0_M2M_CLIENT_SECRET=unused-locally
 VARS

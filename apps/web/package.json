@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173 --strictPort",
     "build": "tsc -p . && vite build",
     "typecheck": "tsc -p .",
-    "dev:local": "VITE_DEV_AUTH=1 vite"
+    "dev:local": "VITE_DEV_AUTH=1 vite --port 5173 --strictPort"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.2.4",
