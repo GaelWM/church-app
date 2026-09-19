@@ -1,0 +1,12 @@
+# Applied by Workers Static Assets to the SPA files. If you use a custom Auth0 domain, add it to connect-src and frame-src.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.auth0.com; frame-src https://*.auth0.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+# Hashed build output can be cached forever; the app shell must revalidate.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

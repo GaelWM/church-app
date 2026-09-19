@@ -7,7 +7,7 @@ docker compose up -d --wait db
 export DATABASE_URL=postgres://postgres:pw@localhost:54320/church
 bun install
 (cd packages/db && bun src/migrate.ts && bun src/seed.ts && bun src/dev-seed.ts)
-docker exec -i church-dev-pg psql -U postgres -d church -q < packages/db/test-setup.sql >/dev/null
+(cd packages/db && APP_DB_PASSWORD=app bun src/grant-app-role.ts)
 # Local-only config (git-ignored). DEV_AUTH is never set in wrangler.jsonc.
 cat > apps/api/.dev.vars <<'VARS'
 DEV_AUTH=1

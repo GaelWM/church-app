@@ -19,7 +19,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run --cwd packages/db migrate && bun run --cwd packages/db seed
-      - run: sudo apt-get install -y postgresql-client && psql "$DATABASE_URL" -f packages/db/test-setup.sql
+      - run: bun run --cwd packages/db grant
+        env: { APP_DB_PASSWORD: app }
       - run: bun run typecheck
       - run: bun test
       - run: bun run --cwd apps/web build

@@ -14,7 +14,7 @@ import { sendDigests, sendMonthlyReports } from "./services/cron";
 import { devAuthEnabled, consoleMailer } from "./services/dev";
 import { cloudflareMailer } from "./services/mailer";
 import { users } from "@church/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // bigint money columns serialise as strings in JSON.
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
@@ -30,7 +30,22 @@ export function createApp(deps: Deps = {}) {
 
   const api = new Hono<AppEnv>()
     .use(services)
+    // API data is never cached by browsers or intermediaries (attachments set their own private cache header).
+    .use(async (c, next) => { await next(); if (!c.res.headers.has("cache-control")) c.header("Cache-Control", "no-store"); })
     .get("/health", (c) => c.json({ ok: true }))
+    // Readiness: the database is reachable AND the role we connect as cannot bypass row-level security.
+    // A superuser / BYPASSRLS connection would silently disable parish isolation, so it is reported as not ready.
+    .get("/health/ready", async (c) => {
+      try {
+        const rows = [...(await c.get("db").execute(sql`select current_user as role, (rolsuper or rolbypassrls) as bypass from pg_roles where rolname = current_user`))] as any[];
+        const r = rows[0];
+        if (!r || r.bypass) return c.json({ ok: false, error: "Le rôle de base de données contourne la sécurité par ligne (RLS)." }, 503);
+        return c.json({ ok: true });
+      } catch (err) {
+        console.error(err);
+        return c.json({ ok: false, error: "Base de données inaccessible." }, 503);
+      }
+    })
     // Local development only: lists demo users for the login picker (404 unless DEV_AUTH is on).
     .get("/dev/users", async (c) => {
       if (!devAuthEnabled(c.env)) throw new HTTPException(404);

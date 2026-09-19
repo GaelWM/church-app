@@ -15,7 +15,7 @@ export type Bindings = {
   MAIL_FROM: string;
   FILES: R2Bucket;
   KV: KVNamespace;
-  EMAIL: { send(msg: { to: string; from: string; subject: string; html: string }): Promise<void> };
+  EMAIL: { send(msg: { to: string; from: string; subject: string; html?: string; text?: string }): Promise<{ messageId: string }> };
 };
 
 export type Membership = { parishId: string; role: Role; consolidatedAccess: boolean };

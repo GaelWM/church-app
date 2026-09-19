@@ -1,27 +1,73 @@
+// Wrangler does NOT inherit bindings or vars into `env.*` blocks, so every environment below is
+// self-contained. The top level is used only by `wrangler dev` (local development).
+//
+// Before deploying, replace every REPLACE_ME (see README → "Go live"):
+//   wrangler hyperdrive create church-<env> --connection-string "<neon DIRECT url, app role>"
+//   wrangler kv namespace create church-kv-<env>
+//   wrangler r2 bucket create church-files-<env>
+//   wrangler secret put AUTH0_M2M_CLIENT_ID --env <env>   (and AUTH0_M2M_CLIENT_SECRET)
 {
   "name": "church-accounting",
   "main": "src/index.ts",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] }, // 18:00 Kinshasa (UTC+1) daily; 1st of month
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_ME", "localConnectionString": "postgres://app_user:app@localhost:54320/church" }],
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files" }],
-  "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_ME" }],
+  // 17:00 UTC = 18:00 in Kinshasa (UTC+1): daily digests; 06:00 UTC on the 1st: monthly report.
+  "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+
+  // ── Local development (wrangler dev) ─────────────────────────────────────
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "local", "localConnectionString": "postgres://app_user:app@localhost:54320/church" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-local" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "local" }],
   "send_email": [{ "name": "EMAIL" }],
   "vars": {
-    "AUTH0_DOMAIN": "REPLACE_ME.auth0.com",
+    "AUTH0_DOMAIN": "dev.invalid",
     "AUTH0_AUDIENCE": "https://church-accounting/api",
-    "APP_URL": "http://localhost:8787",
-    "MAIL_FROM": "no-reply@example.org"
+    "APP_URL": "http://localhost:5173",
+    "MAIL_FROM": "no-reply@localhost"
   },
-  // Secrets (wrangler secret put): AUTH0_M2M_CLIENT_ID, AUTH0_M2M_CLIENT_SECRET
+
   "env": {
-    "staging": { "name": "church-accounting-staging" },
-    "production": { "name": "church-accounting-production" }
+    "staging": {
+      "name": "church-accounting-staging",
+      "compatibility_date": "2025-01-01",
+      "compatibility_flags": ["nodejs_compat"],
+      "observability": { "enabled": true },
+      "assets": { "directory": "../web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+      "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_ME" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-staging" }],
+      "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_ME" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "vars": {
+        "AUTH0_DOMAIN": "REPLACE_ME.auth0.com",
+        "AUTH0_AUDIENCE": "https://church-accounting/api",
+        "APP_URL": "https://staging.REPLACE_ME.org",
+        "MAIL_FROM": "no-reply@REPLACE_ME.org"
+      }
+    },
+    "production": {
+      "name": "church-accounting-production",
+      "compatibility_date": "2025-01-01",
+      "compatibility_flags": ["nodejs_compat"],
+      "observability": { "enabled": true },
+      "assets": { "directory": "../web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+      "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "REPLACE_ME" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-production" }],
+      "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_ME" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "vars": {
+        "AUTH0_DOMAIN": "REPLACE_ME.auth0.com",
+        "AUTH0_AUDIENCE": "https://church-accounting/api",
+        "APP_URL": "https://REPLACE_ME.org",
+        "MAIL_FROM": "no-reply@REPLACE_ME.org"
+      }
+    }
   }
 }

@@ -54,6 +54,34 @@ d("API end to end (real Postgres, RLS + triggers)", () => {
     parishId: ids.parishA, kind, accountId: ids.acct, categoryId: kind === "recette" ? ids.recette : ids.depense, date, amountMinor: amount,
   });
 
+  test("readiness: ok with the non-superuser role, not ready when connected as a superuser (RLS would be bypassed)", async () => {
+    const ready = await app.request("/api/health/ready", {}, env);
+    expect(ready.status).toBe(200);
+    const superDb = createDb(ADMIN_URL!);
+    try {
+      const unsafeApp = createApp({ createDb: () => superDb, mailer: () => mailer });
+      const bad = await unsafeApp.request("/api/health/ready", {}, env);
+      expect(bad.status).toBe(503);
+      expect((await bad.json() as any).ok).toBe(false);
+    } finally {
+      await (superDb as any).$client?.end();
+    }
+  });
+
+  test("tables created by later migrations are usable by the app role (default privileges), migration table is not", async () => {
+    const admin = postgres(ADMIN_URL!, { max: 1 });
+    const app = postgres(APP_URL!, { max: 1 });
+    try {
+      await admin`create table if not exists _probe_${admin.unsafe(sfx)} (x int)`;
+      await admin.unsafe(`insert into _probe_${sfx} values (1)`);
+      expect((await app.unsafe(`select x from _probe_${sfx}`))[0]?.x).toBe(1);
+      await expect(Promise.resolve(app`select * from _migrations`)).rejects.toThrow(/permission denied/);
+    } finally {
+      await admin.unsafe(`drop table if exists _probe_${sfx}`);
+      await admin.end(); await app.end();
+    }
+  });
+
   test("unknown Auth0 user gets 403; missing token 401", async () => {
     expect((await call("nobody", "GET", "/me")).status).toBe(403);
     const r = await app.request("/api/me", {}, env);

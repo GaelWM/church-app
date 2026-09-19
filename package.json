@@ -14,7 +14,8 @@
     "db:migrate": "bun run --cwd packages/db migrate",
     "dev:setup": "scripts/dev-setup.sh",
     "dev": "bun run scripts/dev.ts",
-    "dev:db:reset": "docker compose down -v && scripts/dev-setup.sh"
+    "dev:db:reset": "docker compose down -v && scripts/dev-setup.sh",
+    "smoke": "bun run scripts/smoke.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

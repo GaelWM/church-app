@@ -8,7 +8,8 @@
     "typecheck": "tsc -p .",
     "generate": "drizzle-kit generate",
     "migrate": "bun src/migrate.ts",
-    "seed": "bun src/seed.ts"
+    "seed": "bun src/seed.ts",
+    "grant": "bun src/grant-app-role.ts"
   },
   "dependencies": {
     "@church/shared": "workspace:*",

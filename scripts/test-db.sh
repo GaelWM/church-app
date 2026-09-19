@@ -8,5 +8,5 @@ docker run -d --name $NAME -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=church -p $POR
 until docker exec $NAME pg_isready -U postgres -d church >/dev/null 2>&1; do sleep 1; done
 export DATABASE_URL=postgres://postgres:pw@localhost:$PORT/church
 (cd packages/db && bun src/migrate.ts && bun src/seed.ts) >&2
-docker exec -i $NAME psql -U postgres -d church < packages/db/test-setup.sql >&2
+(cd packages/db && APP_DB_PASSWORD=app bun src/grant-app-role.ts) >&2
 echo "export TEST_ADMIN_DATABASE_URL=$DATABASE_URL TEST_APP_DATABASE_URL=postgres://app_user:app@localhost:$PORT/church"
