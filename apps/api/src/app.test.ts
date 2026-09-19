@@ -197,6 +197,21 @@ d("API end to end (real Postgres, RLS + triggers)", () => {
     expect((await json(r)).error).toMatch(/clôturée/);
   });
 
+  test("audit log shows who did what by name; global entries are visible to administrators only", async () => {
+    const name = `Catégorie ${sfx}`;
+    expect((await call(ids.tok_admin!, "POST", "/categories", { kind: "recette", name })).status).toBe(201);
+    const adminRows = await json(await call(ids.tok_admin!, "GET", "/audit"));
+    const created = adminRows.find((a: any) => a.action === "category.create" && a.after?.name === name);
+    expect(created).toBeTruthy(); // global entry (no parish) is visible to the admin
+    expect(created.actorName).toBe("admin");
+    expect(created.actorEmail).toBe(`admin-${sfx}@t.org`);
+    const tx = adminRows.find((a: any) => a.action === "transaction.validate2");
+    expect(["tresorier", "pasteur"]).toContain(tx.actorName); // parish entries carry names too
+    const pastorRows = await json(await call(ids.tok_pasteur!, "GET", "/audit"));
+    expect(pastorRows.some((a: any) => a.action === "category.create" && a.after?.name === name)).toBe(false);
+    expect(pastorRows.every((a: any) => a.actorName)).toBe(true);
+  });
+
   test("audit log records actions and is append-only", async () => {
     const rows = await json(await call(ids.tok_admin!, "GET", "/audit"));
     expect(rows.some((a: any) => a.action === "transaction.validate2")).toBe(true);

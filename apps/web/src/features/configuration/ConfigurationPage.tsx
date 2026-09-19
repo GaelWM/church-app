@@ -276,7 +276,8 @@ function Audit() {
     <Card title="Journal d'audit" icon={ScrollText}>
       <DataTable rows={q.data ?? []} loading={q.isLoading} emptyIcon={ScrollText} empty="Aucune action enregistrée" columns={[
         { header: "Date", cell: (a) => new Date(a.at).toLocaleString("fr-FR") }, { header: "Action", cell: (a) => a.action },
-        { header: "Objet", cell: (a) => `${a.entity} ${String(a.entityId ?? "").slice(0, 8)}` }, { header: "Auteur", cell: (a) => String(a.actorId ?? "").slice(0, 8) },
+        { header: "Objet", cell: (a) => (a.targetName ? `${a.entity} · ${a.targetName}` : `${a.entity} ${String(a.entityId ?? "").slice(0, 8)}`) },
+        { header: "Auteur", cell: (a) => (a.actorName ? <span className="flex flex-col leading-tight"><span>{a.actorName}</span><span className="text-xs text-muted-foreground">{a.actorEmail}</span></span> : <span className="text-muted-foreground">Système</span>) },
       ]} />
     </Card>
   );

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { accounts, auditLog, categories, departments, exchangeRates, funds, parishes, userParishRoles, users } from "@church/db";
 import { accountSchema, exchangeRateSchema, findRoleConflict, parishSchema, ROLE_PERMISSIONS, ROLES, userCreateSchema, type Role } from "@church/shared";
@@ -168,8 +168,18 @@ export const configRoutes = new Hono<AppEnv>()
       return d!;
     }), 201))
   .get("/audit", requirePerm("audit.view"), async (c) => {
-    const ids = c.get("parishIds");
-    return c.json(await c.get("db").select().from(auditLog).where(inArray(auditLog.parishId, ids)).orderBy(desc(auditLog.at)).limit(500));
+    const db = c.get("db");
+    // Global entries (users, categories, exchange rate) carry no parish: Administrateurs see them too.
+    const scope = c.get("roles").includes("administrateur")
+      ? or(inArray(auditLog.parishId, c.get("parishIds")), isNull(auditLog.parishId))
+      : inArray(auditLog.parishId, c.get("parishIds"));
+    const rows = await db.select({ log: auditLog, actorName: users.fullName, actorEmail: users.email })
+      .from(auditLog).leftJoin(users, eq(users.id, auditLog.actorId)).where(scope).orderBy(desc(auditLog.at)).limit(500);
+    // For actions on a user, also resolve who it was about.
+    const targetIds = [...new Set(rows.filter((r) => r.log.entity === "user" && r.log.entityId).map((r) => r.log.entityId!))];
+    const targets = targetIds.length ? await db.select({ id: users.id, fullName: users.fullName }).from(users).where(inArray(users.id, targetIds)) : [];
+    const nameOf = new Map(targets.map((t) => [t.id, t.fullName]));
+    return c.json(rows.map((r) => ({ ...r.log, actorName: r.actorName, actorEmail: r.actorEmail, targetName: r.log.entity === "user" ? nameOf.get(r.log.entityId ?? "") ?? null : null })));
   });
 
 function assertRoles(roles: Array<{ parishId: string; role: Role }>, adminOf: string[]) {
