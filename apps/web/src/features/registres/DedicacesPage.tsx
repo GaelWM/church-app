@@ -10,7 +10,7 @@ const cfg: RegistreConfig = {
     { key: "childName", label: "Nom de l'enfant", required: true },
     { key: "motherName", label: "Nom de la mère" },
     { key: "fatherName", label: "Nom du père" },
-    { key: "pastorName", label: "Nom du pasteur" },
+    { key: "pastorName", label: "Nom du pasteur", kind: "pastor" },
     { key: "formCompleted", label: "Formulaire de recensement complété", kind: "bool" },
   ],
   columns: [

@@ -10,6 +10,7 @@ import { fmtDate, money } from "../../core/format";
 import type { Tx } from "../../core/types";
 import { exportTable } from "@/lib/export-table";
 import { useSession } from "../../core/session";
+import { OptionSelect } from "@/components/form-controls";
 import { ExportButtons } from "./ExportButtons";
 
 export interface Member { id: string; fullName: string; address?: string | null; whatsapp?: string | null; phone?: string | null; email?: string | null; homeChurch?: string | null; invitedBy?: string | null }
@@ -69,7 +70,7 @@ export function MembersTab() {
         <Picker members={list.data ?? []} onPick={(m) => setMode({ edit: m })} />
       </ModalForm>
       <ModalForm open={typeof mode === "object" && mode !== null} onOpenChange={(o) => !o && close()} title={typeof mode === "object" && mode?.edit ? "Modifier le membre" : "Nouveau membre"}>
-        {typeof mode === "object" && mode && <MemberForm key={mode.edit?.id ?? "new"} member={mode.edit} onClose={close} />}
+        {typeof mode === "object" && mode && <MemberForm key={mode.edit?.id ?? "new"} member={mode.edit} members={list.data ?? []} onClose={close} />}
       </ModalForm>
     </>
   );
@@ -89,16 +90,24 @@ function Picker({ members, onPick }: { members: Member[]; onPick: (m: Member) =>
   );
 }
 
-function MemberForm({ member, onClose }: { member: Member | null; onClose: () => void }) {
+function MemberForm({ member, members, onClose }: { member: Member | null; members: Member[]; onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
   const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(FIELDS.map(([k]) => [k, member?.[k] ?? ""])));
   const [err, setErr] = useState("");
   const save = useMutation({ mutationFn: () => (member ? api.put(`/effectifs/members/${member.id}`, v) : api.post("/effectifs/members", v)), onSuccess: () => { invalidate(); onClose(); } });
+  // "Personne ayant invité": pick an existing member (not the member being edited); a name already stored stays selectable.
+  const inviters = members.filter((m) => m.id !== member?.id).map((m) => m.fullName);
+  if (v.invitedBy && !inviters.includes(v.invitedBy)) inviters.push(v.invitedBy);
+  const inviterOptions = [{ value: "", label: "—" }, ...inviters.sort((a, b) => a.localeCompare(b, "fr")).map((n) => ({ value: n, label: n }))];
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!v.fullName!.trim()) return setErr("Nom requis"); setErr(""); save.mutate(); }} noValidate>
       <FormGrid>
-        {FIELDS.map(([k, h]) => <Field key={k} label={h} error={k === "fullName" ? err : undefined}><Input autoFocus={k === "fullName"} value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} /></Field>)}
+        {FIELDS.map(([k, h]) => <Field key={k} label={h} error={k === "fullName" ? err : undefined}>
+          {k === "invitedBy"
+            ? <OptionSelect value={v[k]!} onValueChange={(x) => setV({ ...v, [k]: x })} options={inviterOptions} />
+            : <Input autoFocus={k === "fullName"} value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} />}
+        </Field>)}
       </FormGrid>
       <div className="mt-3"><ErrorNote error={save.error} /></div>
       <FormFooter pending={save.isPending} onCancel={onClose} />

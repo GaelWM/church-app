@@ -8,7 +8,7 @@ const cfg: RegistreConfig = {
     { key: "husbandName", label: "Nom de l'époux", required: true },
     { key: "wifeName", label: "Nom de l'épouse", required: true },
     { key: "date", label: "Date", kind: "date", required: true },
-    { key: "pastorName", label: "Pasteur" },
+    { key: "pastorName", label: "Pasteur", kind: "pastor" },
     { key: "blessingPlace", label: "Lieu de la bénédiction" },
     { key: "phone", label: "Téléphone", kind: "tel" },
     { key: "coupleAddress", label: "Adresse du couple", full: true },

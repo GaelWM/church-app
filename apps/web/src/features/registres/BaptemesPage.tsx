@@ -8,7 +8,7 @@ const cfg: RegistreConfig = {
     { key: "fullName", label: "Nom(s)", required: true },
     { key: "date", label: "Date", kind: "date", required: true },
     { key: "place", label: "Lieu" },
-    { key: "pastorName", label: "Pasteur" },
+    { key: "pastorName", label: "Pasteur", kind: "pastor" },
     { key: "address", label: "Adresse", full: true },
     { key: "phone", label: "Téléphone", kind: "tel" },
     { key: "whatsapp", label: "WhatsApp", kind: "tel" },

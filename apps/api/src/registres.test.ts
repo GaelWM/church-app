@@ -122,4 +122,18 @@ d("registres (dédicaces, baptêmes, mariages)", () => {
     await sql.end();
     expect(rows.length).toBe(1);
   });
+
+  test("pastors dropdown lists only active pasteur users of the parish", async () => {
+    const sql = postgres(ADMIN_URL!);
+    const [u] = await sql`insert into users (auth0_id, email, full_name, active) values (${`gone-${sfx}`}, ${`gone-${sfx}@t.org`}, 'Pasteur inactif', false) returning id`;
+    await sql`insert into user_parish_roles (user_id, parish_id, role) values (${u!.id}, ${ids.parishA!}, 'pasteur')`;
+    await sql.end();
+    for (const r of ["caissier", "auditeur"]) {
+      const res = await call(r, "GET", "/pastors");
+      expect(res.status).toBe(200);
+      expect((await res.json() as any[]).map((p) => p.fullName)).toEqual(["pasteur"]);
+    }
+    // parish B has no pastor
+    expect((await (await call("caissierB", "GET", "/pastors", undefined, ids.parishB)).json()) as any[]).toEqual([]);
+  });
 });

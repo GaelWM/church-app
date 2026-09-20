@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { getTableName, and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { baptisms, childDedications, marriages, recordFiles } from "@church/db";
+import { baptisms, childDedications, marriages, recordFiles, userParishRoles, users } from "@church/db";
 import { can } from "@church/shared";
 import type { AppEnv } from "../env";
 import { parishScope, requireParish, requirePerm } from "../middleware/auth";
@@ -57,6 +57,16 @@ async function removeFiles(c: { env: AppEnv["Bindings"] }, keys: string[]) {
 export const registreRoutes = new Hono<AppEnv>()
   .use(parishScope)
   .use(readGuard)
+  // Active users holding the Pasteur role in the current parish: feeds the "Pasteur" dropdowns.
+  .get("/pastors", async (c) => {
+    const parishId = c.get("parishId");
+    if (!parishId) return c.json([]); // consolidated view is read-only: nothing to pick
+    const rows = await run(c, (tx) => tx.select({ id: users.id, fullName: users.fullName }).from(userParishRoles)
+      .innerJoin(users, eq(users.id, userParishRoles.userId))
+      .where(and(eq(userParishRoles.parishId, parishId), eq(userParishRoles.role, "pasteur"), eq(users.active, true)))
+      .orderBy(users.fullName));
+    return c.json(rows);
+  })
   // ---- files (defined before /:type routes so "files" is never read as a register)
   .get("/files/:fileId", async (c) => {
     const f = await run(c, async (tx) => (await tx.select().from(recordFiles).where(eq(recordFiles.id, c.req.param("fileId"))))[0]);

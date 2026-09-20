@@ -7,7 +7,7 @@ import { FileSpreadsheet, FileText, Paperclip, Pencil, Plus, Printer, Trash2, ty
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, type Column } from "@/components/common";
-import { DateRangePicker, FormDate, dateLimits } from "@/components/form-controls";
+import { DateRangePicker, FormDate, FormSelect, OptionSelect, dateLimits } from "@/components/form-controls";
 import { exportTable, type ExportFormat } from "@/lib/export-table";
 import { useApi } from "../../core/api";
 import { fmtDate, today } from "../../core/format";
@@ -15,7 +15,7 @@ import { useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 import { FileUploader, ACCEPT, checkFile } from "./FileUploader";
 
-export interface FieldDef { key: string; label: string; kind?: "text" | "date" | "email" | "tel" | "bool"; required?: boolean; full?: boolean }
+export interface FieldDef { key: string; label: string; kind?: "text" | "date" | "email" | "tel" | "bool" | "pastor"; required?: boolean; full?: boolean }
 export interface Row { id: string; fileCount: number; hasFile: boolean; [k: string]: any }
 export interface RegistreConfig {
   type: "dedications" | "baptisms" | "marriages";
@@ -41,6 +41,15 @@ function buildSchema(fields: FieldDef[]) {
   return z.object(shape);
 }
 
+/** Active Pasteur users of the current parish. A value already stored on a record stays selectable even if that user is gone. */
+function usePastorOptions(current?: string) {
+  const api = useApi();
+  const q = useQuery({ queryKey: useScopedKey("registre-pastors"), queryFn: () => api.get<{ id: string; fullName: string }[]>("/registres/pastors"), staleTime: 60_000 });
+  const names = (q.data ?? []).map((p) => p.fullName);
+  if (current && !names.includes(current)) names.push(current);
+  return [{ value: "", label: "—" }, ...names.map((n) => ({ value: n, label: n }))];
+}
+
 export function RegistrePage({ cfg }: { cfg: RegistreConfig }) {
   const api = useApi();
   const s = useSession();
@@ -53,6 +62,7 @@ export function RegistrePage({ cfg }: { cfg: RegistreConfig }) {
   const del = useMutation({ mutationFn: (id: string) => api.del(`/registres/${cfg.type}/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   const rows = list.data ?? [];
   const dateField = cfg.fields.find((x) => x.kind === "date")!;
+  const pastorOptions = usePastorOptions(f.pastor);
 
   const doExport = (fmt: ExportFormat) => exportTable(fmt, {
     title: `${cfg.title} — ${s.parish?.name ?? "Consolidé"}`,
@@ -89,7 +99,7 @@ export function RegistrePage({ cfg }: { cfg: RegistreConfig }) {
       <div className="no-print mb-4 flex flex-wrap items-end gap-x-3 gap-y-3 border-b pb-4">
         <Field label="Période"><DateRangePicker from={f.from} to={f.to} onChange={(r) => setF({ ...f, ...r })} min={minDate} max={dateLimits.past().max} /></Field>
         <Field label="Recherche"><Input className="min-w-48" placeholder={cfg.searchHint} value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} /></Field>
-        <Field label="Pasteur"><Input className="min-w-36" value={f.pastor} onChange={(e) => setF({ ...f, pastor: e.target.value })} /></Field>
+        <Field label="Pasteur"><OptionSelect className="min-w-40" aria-label="Pasteur" value={f.pastor} onValueChange={(v) => setF({ ...f, pastor: v })} options={[{ value: "", label: "Tous" }, ...pastorOptions.slice(1)]} /></Field>
         {Object.values(f).some(Boolean) && <Button type="button" variant="ghost" size="sm" onClick={() => setF({ from: "", to: "", q: "", pastor: "" })}>Réinitialiser</Button>}
       </div>
       <Card>
@@ -109,6 +119,7 @@ function RegistreForm({ cfg, row, canWrite, onClose }: { cfg: RegistreConfig; ro
   const schema = useMemo(() => buildSchema(cfg.fields), [cfg]);
   const defaults = Object.fromEntries(cfg.fields.map((x) => [x.key, x.kind === "bool" ? !!row?.[x.key] : row?.[x.key] ?? (x.kind === "date" && !row ? today() : "")]));
   const { register, control, handleSubmit, formState: { errors } } = useForm<Record<string, any>>({ resolver: zodResolver(schema) as any, defaultValues: defaults });
+  const pastorOptions = usePastorOptions(row?.pastorName);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const save = useMutation({
@@ -129,7 +140,7 @@ function RegistreForm({ cfg, row, canWrite, onClose }: { cfg: RegistreConfig; ro
           ) : (
             <div key={x.key} className={x.full ? "col-span-full" : undefined}>
               <Field label={x.label + (x.required ? " *" : "")} error={errors[x.key]?.message as string | undefined}>
-                {x.kind === "date" ? <FormDate control={control} name={x.key} {...limits()} /> : <Input type={x.kind === "email" ? "email" : x.kind === "tel" ? "tel" : "text"} {...register(x.key)} />}
+                {x.kind === "date" ? <FormDate control={control} name={x.key} {...limits()} /> : x.kind === "pastor" ? <FormSelect control={control} name={x.key} options={pastorOptions} /> : <Input type={x.kind === "email" ? "email" : x.kind === "tel" ? "tel" : "text"} {...register(x.key)} />}
               </Field>
             </div>
           ))}
