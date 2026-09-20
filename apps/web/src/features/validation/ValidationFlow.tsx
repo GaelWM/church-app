@@ -20,6 +20,7 @@ const ROLE_STEPS: Record<Role, Step[]> = {
   tresorier: [3, 4],
   pasteur: [5, 6],
   administrateur: [],
+  auditeur: [],
 };
 
 /** Which states each role acts on (their "to do" boxes). */
@@ -28,6 +29,7 @@ const ROLE_NODES: Record<Role, TxStatus[]> = {
   tresorier: ["soumise"],
   pasteur: ["validee1"],
   administrateur: [],
+  auditeur: [],
 };
 
 const STEP_LABEL: Record<Step, string> = {
@@ -76,6 +78,15 @@ const EXPLANATIONS: Record<Role, Explanation> = {
     ],
     note: <>Vous gérez les paroisses, comptes, catégories, utilisateurs et le taux de change (Configuration).</>,
   },
+  auditeur: {
+    title: "Auditeur : vous consultez",
+    icon: <Eye className="size-4" />,
+    steps: [
+      <>Vous consultez toutes les écritures, leur historique, les rapports et le journal d'audit, en <b>lecture seule</b>.</>,
+      <>Vous ne saisissez ni ne validez rien.</>,
+    ],
+    note: <>Vous pouvez exporter les rapports en Excel et PDF.</>,
+  },
 };
 
 // ── Diagram geometry (viewBox 1040 × 236) ────────────────────────────────────
@@ -86,6 +97,7 @@ const NODES: Record<TxStatus, { x: number; w: number; y: number; label: string }
   validee1: { x: 540, w: 176, y: NODE.y, label: STATUS_LABELS.validee1 },
   validee: { x: 836, w: 138, y: NODE.y, label: "Validée (Pasteur)" },
   rejetee: { x: 380, w: 110, y: 160, label: STATUS_LABELS.rejetee },
+  annulee: { x: 0, w: 0, y: 0, label: STATUS_LABELS.annulee }, // not drawn: cancellation goes through a change request
 };
 
 const ARROWS: { step: Step; d: string; badge: [number, number]; label: [number, number, "start" | "middle" | "end"] | null }[] = [
@@ -130,7 +142,7 @@ function Diagram({ mine, todo, counts }: { mine: Set<Step>; todo: Set<TxStatus>;
       })}
 
       {/* states */}
-      {(Object.keys(NODES) as TxStatus[]).map((k) => {
+      {(Object.keys(NODES) as TxStatus[]).filter((k) => k !== "annulee").map((k) => {
         const n = NODES[k];
         const act = todo.has(k);
         const count = counts?.[k];

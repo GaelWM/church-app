@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useMemo, type ReactNode } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "../core/auth";
 import "../core/i18n";
@@ -13,6 +13,12 @@ import { BanquesPage } from "../features/banques/BanquesPage";
 import { JournalPage } from "../features/journal/JournalPage";
 import { EngagementsPage } from "../features/engagements/EngagementsPage";
 import { EffectifsPage } from "../features/effectifs/EffectifsPage";
+import { DedicacesPage } from "../features/registres/DedicacesPage";
+import { BaptemesPage } from "../features/registres/BaptemesPage";
+import { MariagesPage } from "../features/registres/MariagesPage";
+import { ReportsPage } from "../features/reports/ReportsPage";
+import { RequestChangeButton } from "../features/validation/ChangeRequestDialog";
+import type { Tx } from "../core/types";
 import { ValidationPage } from "../features/validation/ValidationPage";
 import { ConfigurationPage } from "../features/configuration/ConfigurationPage";
 import { LogOut, RefreshCw, ServerCrash, ShieldAlert } from "lucide-react";
@@ -46,6 +52,12 @@ function Authenticated() {
   );
 }
 
+/** URL-level guard: hidden menu entries must not be reachable by typing the address. */
+function Guard({ allow, children }: { allow: (s: ReturnType<typeof useSession>) => boolean; children: ReactNode }) {
+  const s = useSession();
+  return allow(s) ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function Gate() {
   const me = useMe();
   if (me.isLoading) return <PageSpinner label="Chargement de votre session…" />;
@@ -67,11 +79,15 @@ function Gate() {
           <Route path="recettes" element={<RecettesPage />} />
           <Route path="depenses" element={<DepensesPage />} />
           <Route path="banques" element={<BanquesPage />} />
-          <Route path="journal" element={<JournalPage />} />
+          <Route path="journal" element={<JournalPage rowActions={(r) => <RequestChangeButton tx={{ ...r, parishId: "", rateUsed: "", amountUsdMinor: "", departmentId: null } as unknown as Tx} />} />} />
           <Route path="engagements" element={<EngagementsPage />} />
           <Route path="effectifs" element={<EffectifsPage />} />
-          <Route path="validation" element={<ValidationPage />} />
-          <Route path="configuration" element={<ConfigurationPage />} />
+          <Route path="dedicaces" element={<DedicacesPage />} />
+          <Route path="baptemes" element={<BaptemesPage />} />
+          <Route path="mariages" element={<MariagesPage />} />
+          <Route path="rapports" element={<Guard allow={(s) => s.can("report.export") || s.can("transaction.readAll")}><ReportsPage /></Guard>} />
+          <Route path="validation" element={<Guard allow={(s) => s.can("transaction.validate1") || s.can("transaction.validate2") || s.can("transaction.readAll") || s.can("change.request")}><ValidationPage /></Guard>} />
+          <Route path="configuration" element={<Guard allow={(s) => s.roles.includes("administrateur") || s.can("audit.view")}><ConfigurationPage /></Guard>} />
         </Route>
       </Routes>
     </SessionProvider>

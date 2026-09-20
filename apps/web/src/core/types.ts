@@ -9,5 +9,18 @@ export interface Tx {
   currency: Currency; amountMinor: string; rateUsed: string; amountUsdMinor: string; date: string; status: TxStatus;
   description?: string | null; beneficiary?: string | null; documentNumber?: string | null; departmentId?: string | null; memberId?: string | null;
   enteredBy: string; transferGroupId?: string | null; reversesId?: string | null; pledgeId?: string | null; reconciledAt?: string | null;
+  createdAt?: string; subCategory?: string | null; commitmentId?: string | null;
+  enteredByName?: string | null; validator1Id?: string | null; validator1Name?: string | null; validator1At?: string | null;
+  validator2Id?: string | null; validator2Name?: string | null; validator2At?: string | null;
 }
-export interface JournalRow extends Omit<Tx, "amountMinor"> { amount_minor?: string; amountMinor: string; running_balance: string }
+/** GET /transactions/journal rows (camelCase, joined names). */
+export interface JournalRow {
+  id: string; reference: string; kind: string; direction: "in" | "out"; status: TxStatus; date: string; createdAt: string; currency: Currency;
+  accountId: string; accountName: string | null; categoryId: string | null; categoryName: string | null; subCategory: string | null;
+  documentNumber: string | null; description: string | null; beneficiary: string | null; amountMinor: string; runningBalance: string;
+  reversesId: string | null; transferGroupId: string | null; enteredBy: string; enteredByName: string | null;
+  validator1Id: string | null; validator1Name: string | null; validator1At: string | null;
+  validator2Id: string | null; validator2Name: string | null; validator2At: string | null;
+}
+export interface JournalSummary { currency: Currency; opening: string; in: string; out: string; recettes: string; depenses: string; closing: string }
+export interface JournalResponse { rows: JournalRow[]; summary: JournalSummary[]; truncated: boolean }

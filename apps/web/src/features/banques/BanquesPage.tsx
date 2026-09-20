@@ -60,6 +60,7 @@ const opSchema = z.object({
   toAccountId: z.string().optional(),
   amount: amountField,
   rate: z.string().optional(),
+  feeType: z.string().optional(),
   description: z.string().optional(),
 }).superRefine((v, ctx) => {
   const need = (path: "accountId" | "fromAccountId" | "toAccountId" | "rate", msg: string) => { if (!v[path]) ctx.addIssue({ code: "custom", path: [path], message: msg }); };
@@ -111,6 +112,7 @@ function OperationForm({ onClose }: { onClose: () => void }) {
     mutationFn: (v: OpValues) => api.post("/banking/operations", {
       type: v.type, date: v.date, description: v.description || undefined, amountMinor: parseAmount(v.amount).toString(),
       ...(single ? { accountId: v.accountId } : { fromAccountId: v.fromAccountId, toAccountId: v.toAccountId }),
+      ...(v.type === "frais" && v.feeType ? { feeType: v.feeType } : {}),
       ...(v.type === "change" ? { actualRateCdfPerUsd: (v.rate ?? "").replace(",", ".") } : {}),
     }),
     onSuccess: () => { invalidate(); onClose(); },
@@ -130,6 +132,9 @@ function OperationForm({ onClose }: { onClose: () => void }) {
           </>
         )}
         <Field label="Montant (devise du compte source)" error={errors.amount?.message}><Input inputMode="decimal" placeholder="0,00" {...register("amount")} /></Field>
+        {type === "frais" && <Field label="Nature des frais"><FormSelect control={control} name="feeType" options={[
+          { value: "", label: "Frais bancaires et commissions" }, { value: "tenue_compte", label: "Frais de tenue de compte bancaire" },
+          { value: "retrait_bancaire", label: "Frais de retrait bancaire" }, { value: "retrait_mobile_money", label: "Frais de retrait Mobile Money" }]} /></Field>}
         {type === "change" && <Field label="Taux obtenu (1 USD = X CDF)" error={errors.rate?.message}><Input inputMode="decimal" {...register("rate")} /></Field>}
         <div className="col-span-full"><Field label="Description"><Input {...register("description")} /></Field></div>
       </FormGrid>

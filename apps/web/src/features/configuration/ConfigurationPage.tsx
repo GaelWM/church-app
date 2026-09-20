@@ -5,8 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Ban, Building2, ArrowLeftRight, Plus, RotateCcw, ScrollText, Settings, Tags, Users as UsersIcon, Wallet } from "lucide-react";
-import { ACCOUNT_TYPES, CURRENCIES, findRoleConflict, ROLE_LABELS, ROLES, type Role } from "@church/shared";
+import { Ban, Building2, ArrowLeftRight, Plus, RotateCcw, ScrollText, Settings, SlidersHorizontal, Tags, Users as UsersIcon, Wallet } from "lucide-react";
+import { ACCOUNT_TYPES, CURRENCIES, findRoleConflict, parseAmount, ROLE_LABELS, ROLES, type Role } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,10 @@ import { fmtDate, today } from "../../core/format";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 
-type Tab = "users" | "parishes" | "accounts" | "categories" | "rate" | "audit";
-const TABS = Object.entries(TAB_LABELS["/configuration"]!) as [Tab, string][];
+type Tab = "users" | "parishes" | "accounts" | "categories" | "rate" | "audit" | "settings";
+// "Paramètres" is defined here until routes.ts carries it.
+const TABS = Object.entries({ ...TAB_LABELS["/configuration"]!, settings: TAB_LABELS["/configuration"]?.settings ?? "Paramètres" }) as [Tab, string][];
+const tabIcon = (t: Tab) => TAB_ICONS["/configuration"]?.[t] ?? SlidersHorizontal;
 
 export function ConfigurationPage() {
   const s = useSession();
@@ -36,10 +38,10 @@ export function ConfigurationPage() {
     <>
       <PageHeader title="Configuration" icon={Settings} />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mb-4">
-        <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => { const Icon = TAB_ICONS["/configuration"]![t]!; return <TabsTrigger key={t} value={t}><Icon />{l}</TabsTrigger>; })}</TabsList>
+        <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => { const Icon = tabIcon(t); return <TabsTrigger key={t} value={t}><Icon />{l}</TabsTrigger>; })}</TabsList>
       </Tabs>
       {tab === "users" && <Users />}{tab === "parishes" && <Parishes />}{tab === "accounts" && <Accounts />}
-      {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}
+      {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}{tab === "settings" && <Parameters />}
     </>
   );
 }
@@ -83,7 +85,11 @@ function Users() {
           { header: "Actif", cell: (u) => (u.active ? "Oui" : "Non") },
           { header: "", cell: (u) => (
             <span className="actions">
-              <OptionSelect size="sm" className="w-auto min-w-32" value="" placeholder="+ profil…" aria-label="Ajouter un profil" onValueChange={(v) => v && addRole.mutate({ user: u, parishId: target, role: v as Role })} options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))} />
+              <OptionSelect size="sm" className="w-auto min-w-32" value="" placeholder="+ profil…" aria-label="Ajouter un profil" onValueChange={(v) => v && addRole.mutate({ user: u, parishId: target, role: v as Role })} options={ROLES.map((r) => {
+                const mine = u.roles.filter((x: any) => x.parishId === target).map((x: any) => x.role as Role);
+                const c = findRoleConflict([...mine, r]);
+                return { value: r, label: c ? `${ROLE_LABELS[r]} — incompatible` : ROLE_LABELS[r] };
+              })} />
               {u.id !== s.me.user.id && <ActionButton size="sm" variant={u.active ? "destructive" : "outline"} icon={u.active ? Ban : RotateCcw} pending={toggle.isPending && toggle.variables?.id === u.id} onClick={() => toggle.mutate({ id: u.id, state: u.active ? "deactivate" : "activate" })}>{u.active ? "Désactiver" : "Réactiver"}</ActionButton>}
             </span>) },
         ]} />
@@ -277,6 +283,71 @@ function Audit() {
         { header: "Objet", cell: (a) => (a.targetName ? `${a.entity} · ${a.targetName}` : `${a.entity} ${String(a.entityId ?? "").slice(0, 8)}`) },
         { header: "Auteur", cell: (a) => (a.actorName ? <span className="flex flex-col leading-tight"><span>{a.actorName}</span><span className="text-xs text-muted-foreground">{a.actorEmail}</span></span> : <span className="text-muted-foreground">Système</span>) },
       ]} />
+    </Card>
+  );
+}
+
+// ── Paramètres (§15.1, §21, §25) ─────────────────────────
+interface ParishSettings {
+  default_currency: "CDF" | "USD"; piece_number_mode: "manual" | "auto" | "mixed";
+  negative_balance_alert: { enabled: boolean; threshold_minor: string };
+  alert_recipients: { roles: Role[]; extra_emails: string[] };
+  retention_policy_note: string; backup_note: string; closure_rule: "mensuelle" | "annuelle" | "les deux";
+}
+// bigint-safe minor → decimal string (never divide money as a Number)
+const minorToInput = (m: string) => { const neg = m.startsWith("-"); const d = (neg ? m.slice(1) : m).padStart(3, "0"); return `${neg ? "-" : ""}${d.slice(0, -2)},${d.slice(-2)}`; };
+const PIECE_MODES = [["manual", "Manuel (saisi par l'utilisateur)"], ["auto", "Automatique (généré)"], ["mixed", "Mixte (généré, modifiable)"]] as const;
+
+function Parameters() {
+  const api = useApi();
+  const q = useQuery({ queryKey: useScopedKey("settings"), queryFn: () => api.get<ParishSettings>("/settings") });
+  const [f, setF] = useState<ParishSettings | null>(null);
+  const [threshold, setThreshold] = useState("0,00");
+  const [extra, setExtra] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!q.data) return;
+    setF(q.data); setThreshold(minorToInput(q.data.negative_balance_alert.threshold_minor)); setExtra(q.data.alert_recipients.extra_emails.join(", "));
+  }, [q.data]);
+  const save = useMutation({
+    mutationFn: (v: ParishSettings) => api.put<ParishSettings>("/settings", v),
+    onSuccess: () => q.refetch(),
+  });
+  if (!f) return <Card title="Paramètres" icon={SlidersHorizontal}>{q.error ? <ErrorNote error={q.error} /> : <p className="muted">Chargement…</p>}</Card>;
+  const set = <K extends keyof ParishSettings>(k: K, v: ParishSettings[K]) => setF({ ...f, [k]: v });
+  const submit = () => {
+    setErr(null);
+    let minor: bigint;
+    try { const neg = threshold.trim().startsWith("-"); minor = parseAmount(threshold.trim().replace(/^-/, "")); if (neg) minor = -minor; } catch { setErr("Seuil invalide"); return; }
+    const emails = extra.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean);
+    save.mutate({ ...f, negative_balance_alert: { ...f.negative_balance_alert, threshold_minor: minor.toString() }, alert_recipients: { ...f.alert_recipients, extra_emails: emails } });
+  };
+  const toggleRole = (r: Role, on: boolean) => set("alert_recipients", { ...f.alert_recipients, roles: on ? [...new Set([...f.alert_recipients.roles, r])] : f.alert_recipients.roles.filter((x) => x !== r) });
+  return (
+    <Card title="Paramètres de la paroisse" icon={SlidersHorizontal}>
+      <div className="space-y-5 text-sm">
+        <Field label="Devise par défaut">
+          <OptionSelect className="w-40" value={f.default_currency} onValueChange={(v) => set("default_currency", v as ParishSettings["default_currency"])} options={CURRENCIES.map((c) => ({ value: c, label: c }))} />
+        </Field>
+        <fieldset className="space-y-1.5"><legend className="mb-1 font-medium">Numérotation des pièces</legend>
+          {PIECE_MODES.map(([v, l]) => <label key={v} className="flex items-center gap-2"><input type="radio" name="piece_mode" checked={f.piece_number_mode === v} onChange={() => set("piece_number_mode", v)} />{l}</label>)}
+        </fieldset>
+        <fieldset className="space-y-2"><legend className="mb-1 font-medium">Alerte solde bas / négatif</legend>
+          <label className="flex items-center gap-2"><Checkbox checked={f.negative_balance_alert.enabled} onCheckedChange={(v) => set("negative_balance_alert", { ...f.negative_balance_alert, enabled: v === true })} /> Activer l'alerte (email quotidien)</label>
+          <Field label="Seuil (montant minimal du solde validé, dans la devise du compte)"><Input className="w-40" inputMode="decimal" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></Field>
+          <div className="space-y-1"><div className="text-muted-foreground">Destinataires par profil</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">{ROLES.map((r) => <label key={r} className="flex items-center gap-1.5"><Checkbox checked={f.alert_recipients.roles.includes(r)} onCheckedChange={(v) => toggleRole(r, v === true)} />{ROLE_LABELS[r]}</label>)}</div>
+          </div>
+          <Field label="Emails supplémentaires (séparés par des virgules)"><Input value={extra} onChange={(e) => setExtra(e.target.value)} /></Field>
+        </fieldset>
+        <Field label="Règle de clôture">
+          <OptionSelect className="w-48" value={f.closure_rule} onValueChange={(v) => set("closure_rule", v as ParishSettings["closure_rule"])} options={[{ value: "mensuelle", label: "Mensuelle" }, { value: "annuelle", label: "Annuelle" }, { value: "les deux", label: "Mensuelle et annuelle" }]} />
+        </Field>
+        <Field label="Politique de conservation des données (note)"><textarea className="min-h-16 w-full rounded-md border bg-transparent p-2" value={f.retention_policy_note} onChange={(e) => set("retention_policy_note", e.target.value)} /></Field>
+        <Field label="Sauvegarde (note)"><textarea className="min-h-16 w-full rounded-md border bg-transparent p-2" value={f.backup_note} onChange={(e) => set("backup_note", e.target.value)} /></Field>
+        <ErrorNote error={err ? new Error(err) : save.error} />
+        <div className="flex items-center gap-3"><Button onClick={submit} disabled={save.isPending}>Enregistrer</Button>{save.isSuccess && !save.isPending && <span className="text-muted-foreground">Enregistré</span>}</div>
+      </div>
     </Card>
   );
 }

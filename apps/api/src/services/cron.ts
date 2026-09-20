@@ -3,6 +3,7 @@ import { parishes, userParishRoles, users, withScope, type Db } from "@church/db
 import { monthlyReport, pendingDigest } from "@church/emails";
 import type { Mailer } from "./mailer";
 import { safeSend } from "./mailer";
+import { checkNegativeBalances } from "./alerts";
 
 async function recipients(db: Db, parishId: string, role: string) {
   return db.select({ email: users.email }).from(users)
@@ -16,6 +17,7 @@ async function allParishes(db: Db) {
 
 /** 18:00 daily: one digest per parish and step, only if something is pending. */
 export async function sendDigests(db: Db, mailer: Mailer, appUrl: string) {
+  await checkNegativeBalances(db, mailer, appUrl).catch((e) => console.error("[alerts] negative balance check failed", e));
   const ps = await allParishes(db);
   if (!ps.length) return;
   const counts = await withScope(db, { userId: "00000000-0000-0000-0000-000000000000", parishIds: ps.map((p) => p.id) }, async (tx) =>

@@ -13,6 +13,8 @@ export const PERMISSIONS = [
   "audit.view",
   "period.close",
   "reconcile",
+  "registry.write", // dédicaces, baptêmes, mariages, membres, ouvriers
+  "change.request", // demander une modification / annulation
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -25,8 +27,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "transaction.readAll",
     "report.export",
     "audit.view",
+    "registry.write",
   ],
-  caissier: ["transaction.create", "transaction.readOwn"],
+  caissier: ["transaction.create", "transaction.readOwn", "change.request", "registry.write"],
   tresorier: ["transaction.validate1", "transaction.readAll", "report.export", "reconcile"],
   pasteur: [
     "transaction.validate2",
@@ -34,7 +37,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "report.export",
     "audit.view",
     "period.close",
+    "registry.write",
   ],
+  // Consultation générale uniquement: no entry, no validation.
+  auditeur: ["transaction.readAll", "report.export", "audit.view"],
 };
 
 export function can(roles: readonly Role[], permission: Permission): boolean {
@@ -48,6 +54,10 @@ export const CONFLICTING_ROLE_PAIRS: ReadonlyArray<readonly [Role, Role]> = [
   ["administrateur", "caissier"],
   ["administrateur", "tresorier"],
   ["administrateur", "pasteur"],
+  ["auditeur", "caissier"],
+  ["auditeur", "tresorier"],
+  ["auditeur", "pasteur"],
+  ["auditeur", "administrateur"],
 ];
 
 export function findRoleConflict(roles: readonly Role[]): readonly [Role, Role] | null {

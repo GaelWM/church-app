@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { transactionEvents, transactions, type Tx } from "@church/db";
+import { commitments, engagementReleases, transactionEvents, transactions, type Tx } from "@church/db";
 import { transition, WorkflowError, type Role, type TxAction, type TxStatus } from "@church/shared";
 import { audit } from "./audit";
 import { accountBalance } from "./ledger";
@@ -38,7 +38,10 @@ export async function applyAction(tx: Tx, actor: Actor, id: string, action: TxAc
       if ((await accountBalance(tx, r.accountId)) - r.amountMinor < 0n)
         throw new HTTPException(422, { message: `Solde insuffisant pour valider ${r.reference}` });
     }
-    await tx.update(transactions).set({ status: next }).where(eq(transactions.id, r.id));
+    const now = new Date();
+    const stamp = next === "validee1" ? { validator1Id: actor.id, validator1At: now }
+      : next === "validee" ? { validator2Id: actor.id, validator2At: now } : {};
+    await tx.update(transactions).set({ status: next, ...stamp }).where(eq(transactions.id, r.id));
     await tx.insert(transactionEvents).values({
       transactionId: r.id, fromStatus: r.status, toStatus: next, actorId: actor.id, comment: comment ?? null,
     });
@@ -46,6 +49,7 @@ export async function applyAction(tx: Tx, actor: Actor, id: string, action: TxAc
       parishId: r.parishId, actorId: actor.id, action: `transaction.${NEXT_EVENT[action]}`,
       entity: "transaction", entityId: r.id, before: { status: r.status }, after: { status: next, comment },
     });
+    if (next === "validee") await autoRelease(tx, actor, r);
     updated.push({ ...r, status: next });
   }
   return updated;
@@ -64,3 +68,25 @@ export async function applyBatch(tx: Tx, actor: Actor, ids: string[], action: Tx
   return results;
 }
 
+
+/** A validated dépense linked to a commitment (or recette linked to a pledge) is a libération; idempotent per transaction. */
+async function autoRelease(tx: Tx, actor: Actor, r: typeof transactions.$inferSelect) {
+  if (!r.commitmentId && !r.pledgeId) return;
+  const [dup] = await tx.select({ id: engagementReleases.id }).from(engagementReleases).where(eq(engagementReleases.transactionId, r.id));
+  if (dup) return;
+  const [rel] = await tx.insert(engagementReleases).values({
+    parishId: r.parishId, pledgeId: r.commitmentId ? null : r.pledgeId, commitmentId: r.commitmentId, date: r.date, currency: r.currency,
+    amountMinor: r.amountMinor, accountId: r.accountId, transactionId: r.id, note: `Auto : ${r.reference}`, createdBy: actor.id,
+  }).returning();
+  await audit(tx, { parishId: r.parishId, actorId: actor.id, action: "engagement.release.auto", entity: "engagement_release", entityId: rel!.id, after: rel });
+  if (r.commitmentId) await refreshCommitmentStatus(tx, r.commitmentId);
+}
+
+/** Commitment becomes `paid` when libéré >= engagé (and back to `open` if it no longer is). */
+export async function refreshCommitmentStatus(tx: Tx, commitmentId: string) {
+  const [c] = await tx.select().from(commitments).where(eq(commitments.id, commitmentId));
+  if (!c || c.status === "cancelled") return;
+  const [sum] = await tx.select({ s: sql<string>`coalesce(sum(${engagementReleases.amountMinor}), 0)::text` }).from(engagementReleases).where(eq(engagementReleases.commitmentId, commitmentId));
+  const status = BigInt(sum!.s) >= c.amountMinor ? "paid" : "open";
+  if (status !== c.status) await tx.update(commitments).set({ status }).where(eq(commitments.id, commitmentId));
+}

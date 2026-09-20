@@ -1,85 +1,28 @@
-import { useState } from "react";
-import { FormDate, dateLimits } from "@/components/form-controls";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Plus, Send, Users, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ActionButton, Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm, PageHeader, ReasonButton, StatusBadge } from "@/components/common";
-import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
-import { useApi } from "../../core/api";
-import { fmtDate, today } from "../../core/format";
-import { useInvalidateLedger, useScopedKey } from "../../core/queries";
-import { useSession } from "../../core/session";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/common";
+import { AttendanceTab } from "./AttendanceTab";
+import { MembersTab } from "./MembersTab";
+import { WorkersTab } from "./WorkersTab";
 
-interface Att { id: string; serviceDate: string; serviceType: string; hommes: number; femmes: number; jeunes: number; enfants: number; visiteurs: number; status: any; enteredBy: string }
-const GROUPS = ["hommes", "femmes", "jeunes", "enfants", "visiteurs"] as const;
-const count = z.coerce.number({ message: "Nombre requis" }).int("Nombre entier").min(0, "Minimum 0");
-const schema = z.object({ serviceDate: z.string().min(1, "Date requise"), serviceType: z.string().min(1, "Culte requis"), hommes: count, femmes: count, jeunes: count, enfants: count, visiteurs: count });
-type Values = z.input<typeof schema>;
+const TABS = [["cultes", "Effectifs des cultes"], ["membres", "Membres"], ["ouvriers", "Ouvriers"]] as const;
+type Tab = (typeof TABS)[number][0];
 
 export function EffectifsPage() {
-  const api = useApi();
-  const s = useSession();
-  const invalidate = useInvalidateLedger();
-  const canEnter = s.can("transaction.create") && !s.consolidated;
-  const [open, setOpen] = useState(false);
-  const list = useQuery({ queryKey: useScopedKey("attendance"), queryFn: () => api.get<Att[]>("/engagements/attendance") });
-  const act = useMutation({ mutationFn: (v: { id: string; action: string; comment?: string }) => api.post(`/engagements/attendance/${v.id}/${v.action}`, { comment: v.comment }), onSuccess: invalidate });
-  const total = (a: Att) => GROUPS.reduce((n, g) => n + a[g], 0);
-
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("tab") as Tab | null;
+  const tab: Tab = TABS.some(([k]) => k === requested) ? requested! : "cultes";
+  useEffect(() => { if (params.get("tab") !== tab) setParams({ tab }, { replace: true }); }, [tab, params]);
   return (
     <>
-      <PageHeader title="Effectifs" icon={Users}>
-        <span className="flex items-center gap-2">
-          <ValidationFlowButton counts={countByStatus(list.data)} />
-          {canEnter && <Button onClick={() => setOpen(true)}><Plus /> Nouveau comptage</Button>}
-        </span>
-      </PageHeader>
-      <Card title="Comptages" icon={Users}>
-        <ErrorNote error={act.error} />
-        <DataTable<Att> rows={list.data ?? []} loading={list.isLoading} emptyIcon={Users} empty="Aucun comptage enregistré" columns={[
-          { header: "Date", cell: (a) => fmtDate(a.serviceDate) }, { header: "Culte", cell: (a) => a.serviceType },
-          ...GROUPS.map((g) => ({ header: g, align: "right" as const, cell: (a: Att) => a[g] })),
-          { header: "Total", align: "right", cell: (a) => total(a) }, { header: "Statut", cell: (a) => <StatusBadge status={a.status} /> },
-          { header: "", cell: (a) => {
-            const mine = a.enteredBy === s.me.user.id;
-            return (
-              <span className="actions">
-                {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <ActionButton size="sm" icon={Send} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "submit")} onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</ActionButton>}
-                {!mine && a.status === "soumise" && s.can("transaction.validate1") && <><ActionButton size="sm" icon={Check} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "validate1")} onClick={() => act.mutate({ id: a.id, action: "validate1" })}>Valider</ActionButton><ReasonButton danger icon={X} label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
-                {!mine && a.status === "validee1" && s.can("transaction.validate2") && <><ActionButton size="sm" icon={Check} pending={(act.isPending && act.variables?.id === a.id && act.variables?.action === "validate2")} onClick={() => act.mutate({ id: a.id, action: "validate2" })}>Valider</ActionButton><ReasonButton danger icon={X} label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} /></>}
-              </span>);
-          } },
-        ]} />
-      </Card>
-      <ModalForm open={open} onOpenChange={setOpen} title="Nouveau comptage" description="Effectifs présents au culte.">
-        <AttendanceForm onClose={() => setOpen(false)} />
-      </ModalForm>
+      <PageHeader title="Effectifs" />
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })} className="mb-4">
+        <TabsList variant="line">{TABS.map(([k, l]) => <TabsTrigger key={k} value={k}>{l}</TabsTrigger>)}</TabsList>
+      </Tabs>
+      {tab === "cultes" && <AttendanceTab />}
+      {tab === "membres" && <MembersTab />}
+      {tab === "ouvriers" && <WorkersTab />}
     </>
-  );
-}
-
-function AttendanceForm({ onClose }: { onClose: () => void }) {
-  const api = useApi();
-  const invalidate = useInvalidateLedger();
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<Values, unknown, z.output<typeof schema>>({
-    resolver: zodResolver(schema), defaultValues: { serviceDate: today(), serviceType: "Culte du dimanche", hommes: 0, femmes: 0, jeunes: 0, enfants: 0, visiteurs: 0 },
-  });
-  const total = GROUPS.reduce((n, g) => n + (Number(watch(g)) || 0), 0);
-  const add = useMutation({ mutationFn: (v: z.output<typeof schema>) => api.post("/engagements/attendance", v), onSuccess: () => { invalidate(); onClose(); } });
-  return (
-    <form onSubmit={handleSubmit((v) => add.mutate(v))} noValidate>
-      <FormGrid>
-        <Field label="Date" error={errors.serviceDate?.message}><FormDate control={control} name="serviceDate" {...dateLimits.past()} /></Field>
-        <Field label="Culte" error={errors.serviceType?.message}><Input {...register("serviceType")} /></Field>
-        {GROUPS.map((g) => <Field key={g} label={g[0]!.toUpperCase() + g.slice(1)} error={errors[g]?.message}><Input type="number" min={0} {...register(g)} /></Field>)}
-        <p className="muted self-end pb-2">Total : <b>{total}</b> présents</p>
-      </FormGrid>
-      <div className="mt-3"><ErrorNote error={add.error} /></div>
-      <FormFooter pending={add.isPending} onCancel={onClose} />
-    </form>
   );
 }

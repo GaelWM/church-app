@@ -150,4 +150,17 @@
   .label-caps { @apply text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground; }
   .center { @apply grid min-h-screen place-items-center p-6 text-center; }
 }
-@media print { .no-print, aside { display: none !important; } }
+.print-only { display: none; }
+@media print {
+  .no-print, aside, header, nav, [data-slot="sidebar"] { display: none !important; }
+  .print-only { display: block; margin-bottom: 8px; }
+  .print-title h1 { font-size: 16px; font-weight: 600; }
+  .print-title p { font-size: 10px; color: #444; }
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: #fff !important; color: #000 !important; }
+  main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .journal table { font-size: 9px; }
+  .journal th, .journal td { padding: 2px 4px !important; white-space: normal; }
+  .journal tr { break-inside: avoid; }
+  .journal-summary { font-size: 10px; }
+}

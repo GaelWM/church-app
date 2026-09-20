@@ -21,7 +21,9 @@ const bankOpSchema = z.discriminatedUnion("type", [
   // Currency exchange at the actual rate obtained ("1 USD = X CDF").
   z.object({ type: z.literal("change"), fromAccountId: uuid, toAccountId: uuid, date, amountMinor: amount, actualRateCdfPerUsd: z.string().regex(/^\d+(\.\d{1,4})?$/), description: z.string().optional() }),
   // Single-leg bank movements.
-  z.object({ type: z.enum(["frais", "interets"]), accountId: uuid, date, amountMinor: amount, description: z.string().optional() }),
+  z.object({ type: z.enum(["frais", "interets"]), accountId: uuid, date, amountMinor: amount, description: z.string().optional(),
+    // Frais: tenue de compte / retrait bancaire / retrait mobile money each have their own category.
+    feeType: z.enum(["tenue_compte", "retrait_bancaire", "retrait_mobile_money"]).optional() }),
 ]);
 
 const CAT_NAME: Record<string, string> = {
@@ -29,8 +31,14 @@ const CAT_NAME: Record<string, string> = {
   change: "Opération de change", frais: "Frais bancaires et commissions", interets: "Intérêts créditeurs",
 };
 
-async function bankCategory(tx: Tx, type: string) {
-  const [cat] = await tx.select().from(categories).where(and(eq(categories.kind, "banque"), eq(categories.name, CAT_NAME[type]!)));
+const FEE_CAT_NAME: Record<string, string> = {
+  tenue_compte: "Frais de tenue de compte bancaire", retrait_bancaire: "Frais de retrait bancaire",
+  retrait_mobile_money: "Frais de retrait Mobile Money",
+};
+
+async function bankCategory(tx: Tx, type: string, feeType?: string) {
+  const name = (feeType && FEE_CAT_NAME[feeType]) || CAT_NAME[type]!;
+  const [cat] = await tx.select().from(categories).where(and(eq(categories.kind, "banque"), eq(categories.name, name)));
   if (!cat) throw new HTTPException(500, { message: "Catégories bancaires non initialisées" });
   return cat.id;
 }
@@ -43,7 +51,7 @@ export const bankingRoutes = new Hono<AppEnv>()
     const parishId = requireParish(c);
     const user = c.get("user");
     const out = await run(c, async (tx) => {
-      const categoryId = await bankCategory(tx, b.type);
+      const categoryId = await bankCategory(tx, b.type, "feeType" in b ? b.feeType : undefined);
       const year = Number(b.date.slice(0, 4));
       const base = { parishId, categoryId, date: b.date, status: "brouillon", enteredBy: user.id, description: b.description ?? null };
       const rows: Array<typeof transactions.$inferInsert> = [];

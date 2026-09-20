@@ -8,7 +8,12 @@ import { attachmentRoutes } from "./routes/attachments";
 import { bankingRoutes } from "./routes/banking";
 import { configRoutes } from "./routes/config";
 import { dashboardRoutes } from "./routes/dashboard";
+import { changeRequestRoutes } from "./routes/change-requests";
+import { effectifRoutes } from "./routes/effectifs";
 import { engagementRoutes } from "./routes/engagements";
+import { registreRoutes } from "./routes/registres";
+import { reportRoutes } from "./routes/reports";
+import { settingsRoutes } from "./routes/settings";
 import { transactionRoutes } from "./routes/transactions";
 import { sendDigests, sendMonthlyReports } from "./services/cron";
 import { devAuthEnabled, consoleMailer } from "./services/dev";
@@ -58,6 +63,11 @@ export function createApp(deps: Deps = {}) {
     .route("/banking", bankingRoutes)
     .route("/dashboard", dashboardRoutes)
     .route("/engagements", engagementRoutes)
+    .route("/change-requests", changeRequestRoutes)
+    .route("/settings", settingsRoutes)
+    .route("/registres", registreRoutes)
+    .route("/effectifs", effectifRoutes)
+    .route("/reports", reportRoutes)
     .route("/attachments", attachmentRoutes);
 
   const app = new Hono<AppEnv>()

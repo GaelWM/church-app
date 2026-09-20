@@ -37,3 +37,10 @@ export const monthlyReport = (p: { parish: string; period: string; lines: Array<
     `<table cellpadding="6" style="border-collapse:collapse">${p.lines.map((l) => `<tr><td>${esc(l.label)}</td><td style="text-align:right"><b>${esc(l.value)}</b></td></tr>`).join("")}</table>
 <p><a href="${esc(p.appUrl)}">Ouvrir le tableau de bord</a></p>`),
 });
+
+export const negativeBalanceEmail = (p: { parish: string; accounts: Array<{ name: string; balance: string }>; threshold: string; appUrl: string }) => ({
+  subject: `Alerte solde bas — ${p.parish}`,
+  html: layout("Alerte solde bas", `<p>Des comptes de <b>${esc(p.parish)}</b> sont sous le seuil d'alerte (${esc(p.threshold)}) :</p>
+<table cellpadding="6" style="border-collapse:collapse">${p.accounts.map((a) => `<tr><td>${esc(a.name)}</td><td style="text-align:right"><b>${esc(a.balance)}</b></td></tr>`).join("")}</table>
+<p><a href="${esc(p.appUrl)}">Ouvrir la comptabilité</a></p>`),
+});

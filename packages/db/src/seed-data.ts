@@ -18,4 +18,5 @@ export const BANK_CATEGORIES = [
   "Versement (caisse vers banque)", "Retrait (banque vers caisse)", "Virement entre comptes",
   "Opération de change", "Frais bancaires et commissions", "Intérêts créditeurs",
   "Virement reçu / paiement par banque",
+  "Frais de tenue de compte bancaire", "Frais de retrait bancaire", "Frais de retrait Mobile Money",
 ];

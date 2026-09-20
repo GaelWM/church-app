@@ -63,7 +63,26 @@ export const transactionInputSchema = z.object({
   departmentId: uuid.optional(),
   memberId: uuid.optional(),
   pledgeId: uuid.optional(),
+  subCategory: z.string().trim().max(200).optional(),
+  commitmentId: uuid.optional(), // dépense only: open engagement this payment relates to
 });
 
 export const rejectSchema = z.object({ comment: z.string().min(1) });
 export const batchActionSchema = z.object({ ids: z.array(uuid).min(1) });
+
+// §27 modification / annulation requests
+export const changeRequestInputSchema = z.object({
+  transactionId: uuid,
+  kind: z.enum(["modification", "annulation"]),
+  reason: z.string().trim().min(5, "Motif obligatoire (5 caractères minimum)"),
+  changes: z.object({
+    description: z.string().nullable().optional(),
+    beneficiary: z.string().nullable().optional(),
+    documentNumber: z.string().nullable().optional(),
+    subCategory: z.string().nullable().optional(),
+    categoryId: uuid.nullable().optional(),
+    departmentId: uuid.nullable().optional(),
+  }).strict().optional(),
+});
+export const changeRequestDecisionSchema = z.object({ comment: z.string().trim().optional() });
+export const changeRequestRejectSchema = z.object({ comment: z.string().trim().min(1, "Motif de rejet obligatoire") });

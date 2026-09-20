@@ -23,11 +23,11 @@ import { moneyParts } from "../core/format";
 type Icon = ComponentType<{ className?: string }>;
 
 const STATUS_DOT: Record<TxStatus, string> = {
-  brouillon: "bg-muted-foreground/60", soumise: "bg-warning", validee1: "bg-warning", validee: "bg-success", rejetee: "bg-destructive",
+  brouillon: "bg-muted-foreground/60", soumise: "bg-warning", validee1: "bg-warning", validee: "bg-success", rejetee: "bg-destructive", annulee: "bg-muted-foreground",
 };
 
 export const STATUS_ICON: Record<TxStatus, ComponentType<{ className?: string }>> = {
-  brouillon: FilePen, soumise: Clock, validee1: ShieldCheck, validee: CircleCheck, rejetee: CircleX,
+  brouillon: FilePen, soumise: Clock, validee1: ShieldCheck, validee: CircleCheck, rejetee: CircleX, annulee: CircleX,
 };
 
 function Dot({ className }: { className: string }) {

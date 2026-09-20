@@ -32,7 +32,12 @@ const schema = z.object({
   departmentId: z.string().optional(),
   memberId: z.string().optional(),
   pledgeId: z.string().optional(),
+  subCategory: z.string().optional(),
+  commitmentId: z.string().optional(),
 });
+/** Exact minor units -> "1234,56" for the amount input (no float). */
+const exactAmount = (minor: string) => { const s = BigInt(minor).toString().padStart(3, "0"); return `${s.slice(0, -2)},${s.slice(-2)}`; };
+const at = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "");
 type FormValues = z.infer<typeof schema>;
 
 /** Recettes and Dépenses share one entry form pattern; only labels and extra fields differ. */
@@ -111,8 +116,18 @@ export function EntryPage({ kind }: { kind: "recette" | "depense" }) {
             { header: "Date", cell: (t) => fmtDate(t.date) },
             { header: "Catégorie", cell: (t) => catName(t.categoryId) },
             { header: "Compte", cell: (t) => acctName(t.accountId) },
+            { header: "N° pièce", cell: (t) => t.documentNumber ?? "" },
+            { header: "Objet", cell: (t) => t.subCategory ?? "" },
             { header: "Montant", align: "right", cell: (t) => money(t.amountMinor, t.currency as Currency) },
             { header: "Statut", cell: (t) => <StatusBadge status={t.status} /> },
+            {
+              header: "Validation", cell: (t) => (t.validator1Name || t.validator2Name) ? (
+                <div className="text-xs leading-tight">
+                  {t.validator1Name && <div>N1 : {t.validator1Name} <span className="text-muted-foreground">{at(t.validator1At)}</span></div>}
+                  {t.validator2Name && <div>N2 : {t.validator2Name} <span className="text-muted-foreground">{at(t.validator2At)}</span></div>}
+                </div>
+              ) : "",
+            },
             {
               header: "", cell: (t) => {
                 const mine = t.enteredBy === s.me.user.id;
@@ -160,6 +175,9 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
   const categories = useCategories(kind);
   const departments = useQuery({ queryKey: useScopedKey("departments"), queryFn: () => api.get<{ id: string; name: string }[]>("/departments") });
   const members = useQuery({ queryKey: useScopedKey("members"), queryFn: () => api.get<{ id: string; fullName: string }[]>("/engagements/members"), enabled: isRecette });
+  const cfg = useQuery({ queryKey: useScopedKey("tx-config"), queryFn: () => api.get<{ pieceNumberMode: "manual" | "auto" | "mixed" }>("/transactions/config") });
+  const pieceMode = cfg.data?.pieceNumberMode ?? "mixed";
+  const commitments = useQuery({ queryKey: useScopedKey("commitments"), queryFn: () => api.get<{ id: string; payee: string; currency: string; amountMinor: string; status: string }[]>("/engagements/commitments"), enabled: !isRecette });
   const pledges = useQuery({ queryKey: useScopedKey("pledges"), queryFn: () => api.get<{ id: string; donorName?: string; categoryId: string }[]>("/engagements/pledges"), enabled: isRecette });
 
   const { register, control, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
@@ -167,14 +185,21 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
     defaultValues: editing
       ? {
           date: editing.date, accountId: editing.accountId, categoryId: editing.categoryId ?? "",
-          amount: (Number(editing.amountMinor) / 100).toFixed(2).replace(".", ","), description: editing.description ?? "",
+          amount: exactAmount(editing.amountMinor), description: editing.description ?? "",
           beneficiary: editing.beneficiary ?? "", documentNumber: editing.documentNumber ?? "", departmentId: editing.departmentId ?? "",
           memberId: editing.memberId ?? "", pledgeId: editing.pledgeId ?? "",
+          subCategory: editing.subCategory ?? "", commitmentId: editing.commitmentId ?? "",
         }
       : { date: today(), accountId: "", categoryId: "", amount: "" },
   });
   const account = accounts.data?.find((a) => a.id === watch("accountId"));
   const category = categories.data?.find((c) => c.id === watch("categoryId"));
+  // Low-balance warning (dépenses): validated balance of the chosen account vs the typed amount.
+  const accountId = watch("accountId");
+  const balance = useQuery({ queryKey: ["tx-balance", accountId], queryFn: () => api.get<{ balance: string }>("/transactions/balance", { accountId }), enabled: !isRecette && !!accountId });
+  let typed: bigint | null = null;
+  try { typed = parseAmount(watch("amount") ?? ""); } catch { /* still typing */ }
+  const lowBalance = !isRecette && balance.data && typed !== null && BigInt(balance.data.balance) < typed;
 
   const save = useMutation({
     mutationFn: async ({ f }: { f: FormValues; another: boolean }) => {
@@ -183,6 +208,7 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
         amountMinor: parseAmount(f.amount).toString(), description: f.description || undefined,
         beneficiary: f.beneficiary || undefined, documentNumber: f.documentNumber || undefined,
         departmentId: f.departmentId || undefined, memberId: f.memberId || undefined, pledgeId: f.pledgeId || undefined,
+        subCategory: f.subCategory || undefined, commitmentId: !isRecette ? f.commitmentId || undefined : undefined,
       };
       if (editing) return api.patch<Tx>(`/transactions/${editing.id}`, body);
       try {
@@ -222,10 +248,17 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
         {isRecette && !!pledges.data?.length && (
           <Field label="Promesse liée (optionnel)"><FormSelect control={control} name="pledgeId" options={[{ value: "", label: "—" }, ...(pledges.data ?? []).map((p) => ({ value: p.id, label: p.donorName ?? p.id.slice(0, 8) }))]} /></Field>
         )}
+        <Field label="Sous-catégorie / objet"><Input {...register("subCategory")} /></Field>
         {!isRecette && <Field label="Bénéficiaire"><Input {...register("beneficiary")} /></Field>}
-        <Field label={isRecette ? "Référence" : "N° pièce (facture, reçu, bon de sortie)"}><Input {...register("documentNumber")} /></Field>
+        {!isRecette && !!commitments.data?.some((m) => m.status === "open") && (
+          <Field label="Engagement associé (optionnel)"><FormSelect control={control} name="commitmentId" options={[{ value: "", label: "—" }, ...commitments.data.filter((m) => m.status === "open" || m.id === editing?.commitmentId).map((m) => ({ value: m.id, label: `${m.payee} · ${money(m.amountMinor, m.currency as Currency)}` }))]} /></Field>
+        )}
+        {pieceMode === "auto"
+          ? <Field label="N° pièce"><Input disabled placeholder="Généré automatiquement" value={editing?.documentNumber ?? ""} readOnly /></Field>
+          : <Field label={pieceMode === "manual" ? "N° pièce (obligatoire)" : "N° pièce (généré si vide)"}><Input placeholder={isRecette ? "Reçu, carnet…" : "Facture, reçu, bon de sortie"} {...register("documentNumber")} /></Field>}
         <div className="col-span-full"><Field label="Description"><Input {...register("description")} /></Field></div>
       </FormGrid>
+      {lowBalance && <div role="alert" className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">Solde insuffisant : {money(balance.data!.balance, (account?.currency ?? "CDF") as Currency)} disponible sur ce compte, la dépense ne pourra pas être validée tant que le solde est inférieur au montant.</div>}
       <div className="mt-3"><ErrorNote error={save.error} /></div>
       <FormFooter
         pending={save.isPending && !save.variables?.another} onCancel={onClose}

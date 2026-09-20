@@ -8,6 +8,13 @@
       "when": 1789836355656,
       "tag": "0000_colorful_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789926184540,
+      "tag": "0001_registers_and_workflows",
+      "breakpoints": true
     }
   ]
 }
