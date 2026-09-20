@@ -1,8 +1,9 @@
 name: deploy
-# push to main  -> staging (automatic)
-# manual run    -> staging or production (production environment should require reviewers in GitHub settings)
+# push to main     -> production (the production environment should require reviewers in GitHub settings)
+# push to staging  -> staging (automatic)
+# manual run       -> staging or production, whichever you pick
 on:
-  push: { branches: [main] }
+  push: { branches: [main, staging] }
   workflow_dispatch:
     inputs:
       environment:
@@ -11,15 +12,15 @@ on:
         options: [staging, production]
         default: staging
 concurrency:
-  group: deploy-${{ inputs.environment || 'staging' }}
+  group: deploy-${{ inputs.environment || (github.ref_name == 'main' && 'production') || 'staging' }}
   cancel-in-progress: false
 permissions: { contents: read }
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'staging' }}
+    environment: ${{ inputs.environment || (github.ref_name == 'main' && 'production') || 'staging' }}
     env:
-      TARGET: ${{ inputs.environment || 'staging' }}
+      TARGET: ${{ inputs.environment || (github.ref_name == 'main' && 'production') || 'staging' }}
       # Owner (migration) credentials: DIRECT Neon URL. The Worker itself uses the app role via Hyperdrive.
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
