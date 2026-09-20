@@ -22,6 +22,8 @@ interface Dash {
   attendance: { service_date: string; service_type: string; total: number; offering_usd: string }[];
 }
 
+const goto = (to: string, text: string) => <Link to={to} className="text-primary underline-offset-4 hover:underline">{text}</Link>;
+
 function Segmented({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   const opt = (v: boolean, text: string) => (
     <button type="button" aria-pressed={value === v} onClick={() => onChange(v)}
@@ -35,24 +37,32 @@ function MonthlyChart({ months, flow }: { months: string[]; flow: (m: string, ki
   const shown = months.slice(-12);
   const max = shown.reduce((a, m) => [flow(m, "recette"), flow(m, "depense")].reduce((x, v) => (v > x ? v : x), a), 1n);
   const pct = (v: bigint) => Math.max(v > 0n ? 2 : 0, Number((v * 100n) / max));
+  const compact = (v: bigint) => new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(Number(v) / 100);
+  const withValues = shown.length <= 6; // beyond that the labels collide; the tooltip and the accessible summary still carry the amounts
+  const summary = shown.map((m) => `${fmtMonth(m)} : recettes ${usd(flow(m, "recette"))}, dépenses ${usd(flow(m, "depense"))}`).join(". ");
+  const bar = (v: bigint, color: string) => (
+    <div className={cn("relative w-full max-w-10 rounded-t-sm", color)} style={{ height: `${pct(v)}%` }}>
+      {withValues && <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-xs tabular-nums text-muted-foreground">{compact(v)}</span>}
+    </div>
+  );
   return (
-    <div>
+    <div role="img" aria-label={`Recettes et dépenses par mois, équivalent USD. ${summary}`}>
       <div className="mb-3 flex gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-chart-1" />Recettes</span>
         <span className="flex items-center gap-1.5"><i className="size-2 rounded-sm bg-chart-2" />Dépenses</span>
       </div>
-      <div className="flex h-44 items-end gap-3 border-b">
+      <div aria-hidden className="flex h-48 items-end gap-3 border-b pt-5">
         {shown.map((m) => {
           const r = flow(m, "recette"), d = flow(m, "depense");
           return (
             <div key={m} className="flex h-full min-w-0 flex-1 items-end justify-center gap-1" title={`${fmtMonth(m)} — recettes ${usd(r)}, dépenses ${usd(d)}, net ${usd(r - d)}`}>
-              <div className="w-full max-w-8 rounded-t-sm bg-chart-1" style={{ height: `${pct(r)}%` }} />
-              <div className="w-full max-w-8 rounded-t-sm bg-chart-2" style={{ height: `${pct(d)}%` }} />
+              {bar(r, "bg-chart-1")}
+              {bar(d, "bg-chart-2")}
             </div>
           );
         })}
       </div>
-      <div className="mt-1.5 flex gap-3">{shown.map((m) => <span key={m} className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground">{fmtMonth(m)}</span>)}</div>
+      <div aria-hidden className="mt-1.5 flex gap-3">{shown.map((m) => <span key={m} className="min-w-0 flex-1 truncate text-center text-xs text-muted-foreground">{fmtMonth(m)}</span>)}</div>
     </div>
   );
 }
@@ -114,7 +124,7 @@ export function DashboardPage() {
       <div className="grid gap-x-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div>
           <Section title="Recettes et dépenses par mois" actions="équivalent USD">
-            {loading ? <Skeleton className="mt-4 h-44 w-full" /> : months.length === 0 ? <p className="py-6 text-sm text-foreground/80">Aucune écriture validée pour l'instant.</p> : <div className="pt-4"><MonthlyChart months={months} flow={flow} /></div>}
+            {loading ? <Skeleton className="mt-4 h-44 w-full" /> : months.length === 0 ? <div className="py-6 text-sm"><p className="text-foreground/80">Aucune écriture validée pour l'instant.</p><p className="mt-2">{goto("/recettes", "Enregistrer une recette")}</p></div> : <div className="pt-4"><MonthlyChart months={months} flow={flow} /></div>}
           </Section>
 
           <Section title="Soldes par compte">
@@ -140,21 +150,21 @@ export function DashboardPage() {
           </Section>
 
           <Section title="Promesses de dons">
-            <DataTable loading={loading} empty="Aucune promesse en cours" rows={d?.pledges ?? []} columns={[
+            <DataTable loading={loading} empty="Aucune promesse en cours" emptyAction={goto("/engagements", "Enregistrer une promesse")} rows={d?.pledges ?? []} columns={[
               { header: "Donateur", cell: (p) => p.donor_name ?? "—" },
               { header: "Reste à recevoir", align: "right", cell: (p) => <Money value={BigInt(p.promised) - BigInt(p.received)} currency={p.currency} /> },
             ]} />
           </Section>
 
           <Section title="Dépenses à venir">
-            <DataTable loading={loading} empty="Aucun engagement à venir" rows={d?.obligations ?? []} columns={[
+            <DataTable loading={loading} empty="Aucun engagement à venir" emptyAction={goto("/engagements", "Enregistrer un engagement")} rows={d?.obligations ?? []} columns={[
               { header: "Bénéficiaire", cell: (o) => <><div>{o.payee}</div><div className="text-xs text-muted-foreground">{fmtDate(o.due_date)}</div></> },
               { header: "Montant", align: "right", cell: (o) => <Money value={o.amount} currency={o.currency} /> },
             ]} />
           </Section>
 
           <Section title="Effectifs" actions="offrande moyenne par personne">
-            <DataTable loading={loading} empty="Aucun comptage validé" rows={(d?.attendance ?? []).map((a, i) => ({ ...a, id: String(i) }))} columns={[
+            <DataTable loading={loading} empty="Aucun comptage validé" emptyAction={goto("/effectifs", "Saisir un comptage")} rows={(d?.attendance ?? []).map((a, i) => ({ ...a, id: String(i) }))} columns={[
               { header: "Culte", cell: (a) => <><div>{a.service_type}</div><div className="text-xs text-muted-foreground">{fmtDate(a.service_date)}</div></> },
               { header: "Présents", align: "right", cell: (a) => a.total },
               { header: "Par personne", align: "right", cell: (a) => (a.total ? <Money value={Math.round(Number(a.offering_usd) / a.total)} currency="USD" /> : "—") },

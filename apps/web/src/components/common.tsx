@@ -89,11 +89,12 @@ export interface Column<T> {
   /** Makes the column sortable; return the value to order by (nullish values sort last). */
   sort?: (row: T) => string | number | bigint | null | undefined;
 }
-export function EmptyState({ title, description }: { icon?: Icon; title: string; description?: string }) {
+export function EmptyState({ title, description, action }: { icon?: Icon; title: string; description?: string; /** The next step, e.g. a link to the page where the first item is created. */ action?: ReactNode }) {
   return (
     <div className="py-6 text-sm">
       <p className="text-foreground/80">{title}</p>
       {description && <p className="mt-0.5 text-muted-foreground">{description}</p>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
@@ -106,8 +107,8 @@ const compareValues = (x: SortValue, y: SortValue) => {
 };
 
 /** shadcn Data Table: Table primitives driven by TanStack Table (sortable headers, optional pagination), with a skeleton while loading and an empty state. */
-export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", pageSize }: {
-  rows: T[]; columns: Column<T>[]; empty?: string; emptyIcon?: Icon; loading?: boolean;
+export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", emptyAction, pageSize }: {
+  rows: T[]; columns: Column<T>[]; empty?: string; emptyAction?: ReactNode; emptyIcon?: Icon; loading?: boolean;
   /** Paginate at this many rows (the pager only appears when there is more than one page). */
   pageSize?: number;
   select?: { selected: Set<string>; onChange: (s: Set<string>) => void; /** Rows that cannot be selected get a disabled checkbox. */ selectable?: (r: T) => boolean };
@@ -131,7 +132,7 @@ export function DataTable<T extends { id?: string }>({ rows, columns, select, lo
   });
 
   if (loading) return <TableSkeleton columns={columns.length + (select ? 1 : 0)} />;
-  if (!rows.length) return <EmptyState title={empty} />;
+  if (!rows.length) return <EmptyState title={empty} action={emptyAction} />;
   const pickable = select?.selectable ? rows.filter(select.selectable) : rows;
   const all = !!select && pickable.length > 0 && pickable.every((r) => select.selected.has(r.id!));
   const right = (m: unknown) => (m as { align?: "right" } | undefined)?.align === "right";
