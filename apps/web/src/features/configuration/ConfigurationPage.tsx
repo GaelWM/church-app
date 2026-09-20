@@ -56,11 +56,12 @@ const userSchema = z.object({
 function Users() {
   const api = useApi();
   const s = useSession();
+  const invalidate = useInvalidateLedger();
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.get<any[]>("/users") });
   const [open, setOpen] = useState(false);
   const adminParishes = s.me.parishes.filter((p) => p.roles.includes("administrateur"));
   const [target, setTarget] = useState(adminParishes[0]?.id ?? "");
-  const toggle = useMutation({ mutationFn: (v: { id: string; state: "activate" | "deactivate" }) => api.post(`/users/${v.id}/${v.state}`), onSuccess: () => users.refetch() });
+  const toggle = useMutation({ mutationFn: (v: { id: string; state: "activate" | "deactivate" }) => api.post(`/users/${v.id}/${v.state}`), onSuccess: () => invalidate() });
   const addRole = useMutation({
     mutationFn: (v: { user: any; parishId: string; role: Role }) => {
       const roles = [...v.user.roles, { parishId: v.parishId, role: v.role, consolidatedAccess: false }];
@@ -68,7 +69,7 @@ function Users() {
       if (conflict) throw new Error(`Profils incompatibles dans une même paroisse : ${conflict.map((r) => ROLE_LABELS[r]).join(" + ")}`);
       return api.put(`/users/${v.user.id}/roles`, { roles });
     },
-    onSuccess: () => users.refetch(),
+    onSuccess: () => invalidate(),
   });
   const pName = (id: string) => s.me.parishes.find((p) => p.id === id)?.name ?? id.slice(0, 6);
   return (
@@ -95,7 +96,7 @@ function Users() {
         ]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouvel utilisateur" description="Un email d'invitation avec un lien pour définir le mot de passe est envoyé automatiquement.">
-        <UserForm parishes={adminParishes} onClose={() => setOpen(false)} onDone={() => users.refetch()} />
+        <UserForm parishes={adminParishes} onClose={() => setOpen(false)} onDone={() => invalidate()} />
       </ModalForm>
     </>
   );
@@ -145,8 +146,9 @@ function Parishes() {
 
 function ParishForm({ onClose }: { onClose: () => void }) {
   const api = useApi();
+  const invalidate = useInvalidateLedger();
   const { register, control, handleSubmit, formState: { errors } } = useForm<z.infer<typeof parishSchema>>({ resolver: zodResolver(parishSchema) });
-  const create = useMutation({ mutationFn: (v: z.infer<typeof parishSchema>) => api.post("/parishes", { name: v.name, code: v.code.toUpperCase(), city: v.city || undefined }), onSuccess: () => location.reload() });
+  const create = useMutation({ mutationFn: (v: z.infer<typeof parishSchema>) => api.post("/parishes", { name: v.name, code: v.code.toUpperCase(), city: v.city || undefined }), onSuccess: () => { invalidate(); onClose(); } });
   return (
     <form onSubmit={handleSubmit((v) => create.mutate(v))} noValidate className="space-y-3">
       <Field label="Nom" error={errors.name?.message}><Input autoFocus {...register("name")} /></Field>
@@ -245,6 +247,7 @@ const rateSchema = z.object({ rate: z.string().regex(/^\d+([.,]\d{1,4})?$/, "Tau
 
 function Rate() {
   const api = useApi();
+  const invalidate = useInvalidateLedger();
   const rates = useQuery({ queryKey: ["rates"], queryFn: () => api.get<{ id: string; rateCdfPerUsd: string; effectiveFrom: string }[]>("/exchange-rates") });
   const [open, setOpen] = useState(false);
   return (
@@ -253,7 +256,7 @@ function Rate() {
         <p className="muted">Le taux est copié sur chaque écriture à la saisie : modifier le taux ne change jamais l'historique. Tous les utilisateurs sont notifiés par email.</p>
         <DataTable rows={rates.data ?? []} loading={rates.isLoading} emptyIcon={ArrowLeftRight} empty="Aucun taux défini" columns={[{ header: "Effectif", cell: (r) => fmtDate(r.effectiveFrom) }, { header: "Taux", align: "right", cell: (r) => r.rateCdfPerUsd }]} />
       </Card>
-      <ModalForm open={open} onOpenChange={setOpen} title="Nouveau taux de change" className="sm:max-w-md"><RateForm onClose={() => setOpen(false)} onDone={() => rates.refetch()} /></ModalForm>
+      <ModalForm open={open} onOpenChange={setOpen} title="Nouveau taux de change" className="sm:max-w-md"><RateForm onClose={() => setOpen(false)} onDone={() => invalidate()} /></ModalForm>
     </>
   );
 }
@@ -300,6 +303,7 @@ const PIECE_MODES = [["manual", "Manuel (saisi par l'utilisateur)"], ["auto", "A
 
 function Parameters() {
   const api = useApi();
+  const invalidate = useInvalidateLedger();
   const q = useQuery({ queryKey: useScopedKey("settings"), queryFn: () => api.get<ParishSettings>("/settings") });
   const [f, setF] = useState<ParishSettings | null>(null);
   const [threshold, setThreshold] = useState("0,00");
@@ -311,7 +315,7 @@ function Parameters() {
   }, [q.data]);
   const save = useMutation({
     mutationFn: (v: ParishSettings) => api.put<ParishSettings>("/settings", v),
-    onSuccess: () => q.refetch(),
+    onSuccess: () => invalidate(),
   });
   if (!f) return <Card title="Paramètres" icon={SlidersHorizontal}>{q.error ? <ErrorNote error={q.error} /> : <p className="muted">Chargement…</p>}</Card>;
   const set = <K extends keyof ParishSettings>(k: K, v: ParishSettings[K]) => setF({ ...f, [k]: v });

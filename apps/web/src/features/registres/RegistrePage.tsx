@@ -59,7 +59,7 @@ export function RegistrePage({ cfg }: { cfg: RegistreConfig }) {
   const [edit, setEdit] = useState<Row | "new" | null>(null);
   const key = useScopedKey("registre", cfg.type);
   const list = useQuery({ queryKey: [...key, f], queryFn: () => api.get<Row[]>(`/registres/${cfg.type}`, f) });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`/registres/${cfg.type}/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
+  const del = useMutation({ mutationFn: (id: string) => api.del(`/registres/${cfg.type}/${id}`), onSuccess: () => qc.invalidateQueries() });
   const rows = list.data ?? [];
   const dateField = cfg.fields.find((x) => x.kind === "date")!;
   const pastorOptions = usePastorOptions(f.pastor);
@@ -128,8 +128,9 @@ function RegistreForm({ cfg, row, canWrite, onClose }: { cfg: RegistreConfig; ro
       if (file) await api.upload(`/registres/${cfg.type}/${saved.id}/files`, file);
       return saved;
     },
-    onSettled: () => qc.invalidateQueries(),
-    onSuccess: onClose,
+    // Wait for the list to refetch so the new/edited row is already in the table when the dialog closes.
+    onSuccess: async () => { await qc.invalidateQueries(); onClose(); },
+    onError: () => { qc.invalidateQueries(); }, // e.g. the record saved but the file upload failed: keep the list truthful
   });
   return (
     <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate>
