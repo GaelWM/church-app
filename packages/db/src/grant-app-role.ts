@@ -24,7 +24,9 @@ const statements = [
      if not exists (select from pg_roles where rolname = ${literal(role)}) then
        create role ${role} login password ${literal(password)} nosuperuser nobypassrls nocreatedb nocreaterole;
      else
-       alter role ${role} login password ${literal(password)} nosuperuser nobypassrls nocreatedb nocreaterole;
+       -- No attribute flags here: managed Postgres (Neon) owners are not real superusers, and even
+       -- "nosuperuser" in ALTER ROLE is rejected for them. The attributes are verified below instead.
+       alter role ${role} login password ${literal(password)};
      end if;
    end $$`,
   `grant usage on schema public to ${role}`,
@@ -39,5 +41,12 @@ const statements = [
 ];
 
 for (const s of statements) await sql.unsafe(s);
+
+// RLS is only enforced for a non-superuser without BYPASSRLS; refuse to continue otherwise.
+const [attrs] = await sql`select rolsuper, rolbypassrls from pg_roles where rolname = ${role}`;
+if (!attrs || attrs.rolsuper || attrs.rolbypassrls) {
+  await sql.end();
+  throw new Error(`Role "${role}" is a superuser or has BYPASSRLS, so RLS would not apply. Fix it in the Neon console (or drop the role) and re-run.`);
+}
 await sql.end();
 console.log(`Role "${role}" ready (non-superuser, RLS applies).`);
