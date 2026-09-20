@@ -7,169 +7,67 @@
 //   wrangler r2 bucket create church-files-<env>
 //   wrangler secret put AUTH0_M2M_CLIENT_ID --env <env>   (and AUTH0_M2M_CLIENT_SECRET)
 {
-	"name": "church-accounting",
-	"main": "src/index.ts",
-	"compatibility_date": "2025-01-01",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"observability": {
-		"enabled": true
-	},
-	"assets": {
-		"directory": "../web/dist",
-		"not_found_handling": "single-page-application",
-		"run_worker_first": [
-			"/api/*"
-		]
-	},
-	// 17:00 UTC = 18:00 in Kinshasa (UTC+1): daily digests; 06:00 UTC on the 1st: monthly report.
-	"triggers": {
-		"crons": [
-			"0 17 * * *",
-			"0 6 1 * *"
-		]
-	},
-	// ── Local development (wrangler dev) ─────────────────────────────────────
-	"hyperdrive": [
-		{
-			"binding": "HYPERDRIVE",
-			"id": "local",
-			"localConnectionString": "postgres://app_user:app@localhost:54320/church"
-		}
-	],
-	"r2_buckets": [
-		{
-			"binding": "FILES",
-			"bucket_name": "church-files-local"
-		}
-	],
-	"kv_namespaces": [
-		{
-			"binding": "KV",
-			"id": "local"
-		},
-		{
-			"binding": "church_kv_staging",
-			"id": "89837f5787274a76b6ee2dea2b441dc4",
-			"remote": true
-		}
-	],
-	"send_email": [
-		{
-			"name": "EMAIL"
-		}
-	],
-	"vars": {
-		"AUTH0_DOMAIN": "dev.invalid",
-		"AUTH0_AUDIENCE": "https://church-accounting/api",
-		"APP_URL": "http://localhost:5173",
-		"MAIL_FROM": "no-reply@localhost"
-	},
-	"env": {
-		"staging": {
-			"name": "church-accounting-staging",
-			"compatibility_date": "2025-01-01",
-			"compatibility_flags": [
-				"nodejs_compat"
-			],
-			"observability": {
-				"enabled": true
-			},
-			"assets": {
-				"directory": "../web/dist",
-				"not_found_handling": "single-page-application",
-				"run_worker_first": [
-					"/api/*"
-				]
-			},
-			"triggers": {
-				"crons": [
-					"0 17 * * *",
-					"0 6 1 * *"
-				]
-			},
-			"hyperdrive": [
-				{
-					"binding": "HYPERDRIVE",
-					"id": "REPLACE_ME"
-				}
-			],
-			"r2_buckets": [
-				{
-					"binding": "FILES",
-					"bucket_name": "church-files-staging"
-				}
-			],
-			"kv_namespaces": [
-				{
-					"binding": "KV",
-					"id": "REPLACE_ME"
-				}
-			],
-			"send_email": [
-				{
-					"name": "EMAIL"
-				}
-			],
-			"vars": {
-				"AUTH0_DOMAIN": "REPLACE_ME.auth0.com",
-				"AUTH0_AUDIENCE": "https://church-accounting/api",
-				"APP_URL": "https://staging.REPLACE_ME.org",
-				"MAIL_FROM": "no-reply@REPLACE_ME.org"
-			}
-		},
-		"production": {
-			"name": "church-accounting-production",
-			"compatibility_date": "2025-01-01",
-			"compatibility_flags": [
-				"nodejs_compat"
-			],
-			"observability": {
-				"enabled": true
-			},
-			"assets": {
-				"directory": "../web/dist",
-				"not_found_handling": "single-page-application",
-				"run_worker_first": [
-					"/api/*"
-				]
-			},
-			"triggers": {
-				"crons": [
-					"0 17 * * *",
-					"0 6 1 * *"
-				]
-			},
-			"hyperdrive": [
-				{
-					"binding": "HYPERDRIVE",
-					"id": "REPLACE_ME"
-				}
-			],
-			"r2_buckets": [
-				{
-					"binding": "FILES",
-					"bucket_name": "church-files-production"
-				}
-			],
-			"kv_namespaces": [
-				{
-					"binding": "KV",
-					"id": "REPLACE_ME"
-				}
-			],
-			"send_email": [
-				{
-					"name": "EMAIL"
-				}
-			],
-			"vars": {
-				"AUTH0_DOMAIN": "church-app.us.auth0.com",
-				"AUTH0_AUDIENCE": "https://church-app.us.auth0.com/api/v2/",
-				"APP_URL": "https://REPLACE_ME.org",
-				"MAIL_FROM": "no-reply@REPLACE_ME.org"
-			}
-		}
-	}
+  "name": "church-accounting",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // 17:00 UTC = 18:00 in Kinshasa (UTC+1): daily digests; 06:00 UTC on the 1st: monthly report.
+  "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+
+  // ── Local development (wrangler dev) ─────────────────────────────────────
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "local", "localConnectionString": "postgres://app_user:app@localhost:54320/church" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-local" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "local" }],
+  "send_email": [{ "name": "EMAIL" }],
+  "vars": {
+    "AUTH0_DOMAIN": "dev.invalid",
+    "AUTH0_AUDIENCE": "https://church-accounting/api",
+    "APP_URL": "http://localhost:5173",
+    "MAIL_FROM": "no-reply@localhost"
+  },
+
+  "env": {
+    "staging": {
+      "name": "church-accounting-staging",
+      "compatibility_date": "2025-01-01",
+      "compatibility_flags": ["nodejs_compat"],
+      "observability": { "enabled": true },
+      "assets": { "directory": "../web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+      "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "5ab87017db4e40f994488a30009c5af3" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-staging" }],
+      "kv_namespaces": [{ "binding": "KV", "id": "89837f5787274a76b6ee2dea2b441dc4" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "vars": {
+        "AUTH0_DOMAIN": "church-app.us.auth0.com",
+        "AUTH0_AUDIENCE": "https://church-app.us.auth0.com/api/v2/",
+        "APP_URL": "https://staging.eklezia.app",
+        "MAIL_FROM": "no-reply@staging.eklezia.app"
+      }
+    },
+    "production": {
+      "name": "church-accounting-production",
+      "compatibility_date": "2025-01-01",
+      "compatibility_flags": ["nodejs_compat"],
+      "observability": { "enabled": true },
+      "assets": { "directory": "../web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
+      "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "5378ed41886b4b4ea71912ce649e0b68" }],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-production" }],
+      "kv_namespaces": [{ "binding": "KV", "id": "19eb96675fac4aa8af496d6f0b8b1fe9" }],
+      "send_email": [{ "name": "EMAIL" }],
+      "vars": {
+        "AUTH0_DOMAIN": "church-app.us.auth0.com",
+        "AUTH0_AUDIENCE": "https://church-app.us.auth0.com/api/v2/",
+        "APP_URL": "https://eklezia.app",
+        "MAIL_FROM": "no-reply@eklezia.app"
+      }
+    }
+  }
 }
