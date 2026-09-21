@@ -47,7 +47,7 @@
       "send_email": [{ "name": "EMAIL" }],
       "vars": {
         "AUTH0_DOMAIN": "church-app.us.auth0.com",
-        "AUTH0_AUDIENCE": "https://api.staging.eklezia.app",
+        "AUTH0_AUDIENCE": "https://api.eklezia.app",
         "APP_URL": "https://staging.eklezia.app",
         "MAIL_FROM": "no-reply@staging.eklezia.app"
       }
