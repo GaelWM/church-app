@@ -16,7 +16,7 @@ async function managementToken(env: Bindings): Promise<string> {
       audience: `https://${env.AUTH0_DOMAIN}/api/v2/`,
     }),
   });
-  if (!res.ok) throw new Error(`Auth0 token error ${res.status}`);
+  if (!res.ok) throw new Error(`Auth0 token error ${res.status}: ${await res.text()}`);
   const { access_token } = (await res.json()) as { access_token: string };
   // Free plan allows 1,000 M2M tokens/month: cache for 23h (~30/month).
   await env.KV.put(TOKEN_KEY, access_token, { expirationTtl: 23 * 3600 });
