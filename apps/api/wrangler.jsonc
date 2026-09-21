@@ -27,7 +27,7 @@
   "send_email": [{ "name": "EMAIL" }],
   "vars": {
     "AUTH0_DOMAIN": "dev.invalid",
-    "AUTH0_AUDIENCE": "https://church-accounting/api",
+    "AUTH0_AUDIENCE": "https://api.eklezia.app",
     "APP_URL": "http://localhost:5173",
     "MAIL_FROM": "no-reply@localhost"
   },
