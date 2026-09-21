@@ -103,6 +103,7 @@ Only after staging is clean: Actions → deploy → `production` (waits for revi
 - Separation of duties: nobody validates what they entered; Administrateur never enters/validates; Caissier/Trésorier/Pasteur/Administrateur profiles cannot be combined in one parish.
 - Excel/PDF exports and the reçu are generated in the browser (keeps Worker CPU low).
 
+
 ## UI
 The web app uses [shadcn/ui](https://ui.shadcn.com) (radix, `radix-nova` preset, Tailwind v4, Lucide icons). Generated components live in
 `apps/web/src/components/ui/`; add more with `cd apps/web && bunx shadcn@latest add <component>`. App-level wrappers
