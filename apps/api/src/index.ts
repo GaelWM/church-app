@@ -4,17 +4,23 @@ import { createMiddleware } from "hono/factory";
 import { createDb } from "@church/db";
 import type { AppEnv, Bindings, Deps } from "./env";
 import { authenticate } from "./middleware/auth";
-import { attachmentRoutes } from "./routes/attachments";
-import { bankingRoutes } from "./routes/banking";
-import { configRoutes } from "./routes/config";
-import { dashboardRoutes } from "./routes/dashboard";
-import { changeRequestRoutes } from "./routes/change-requests";
-import { effectifRoutes } from "./routes/effectifs";
-import { engagementRoutes } from "./routes/engagements";
-import { registreRoutes } from "./routes/registres";
-import { reportRoutes } from "./routes/reports";
-import { settingsRoutes } from "./routes/settings";
-import { transactionRoutes } from "./routes/transactions";
+import { accountRoutes } from "./modules/accounts/accounts.routes";
+import { attachmentRoutes } from "./modules/attachments/attachments.routes";
+import { auditRoutes } from "./modules/audit/audit.routes";
+import { bankingRoutes } from "./modules/banking/banking.routes";
+import { changeRequestRoutes } from "./modules/change-requests/change-requests.routes";
+import { dashboardRoutes } from "./modules/dashboard/dashboard.routes";
+import { departmentRoutes } from "./modules/departments/departments.routes";
+import { effectifRoutes } from "./modules/effectifs/effectifs.routes";
+import { engagementRoutes } from "./modules/engagements/engagements.routes";
+import { meRoutes } from "./modules/me/me.routes";
+import { parishRoutes } from "./modules/parishes/parishes.routes";
+import { referentialRoutes } from "./modules/referential/referential.routes";
+import { registreRoutes } from "./modules/registres/registres.routes";
+import { reportRoutes } from "./modules/reports/reports.routes";
+import { settingsRoutes } from "./modules/settings/settings.routes";
+import { transactionRoutes } from "./modules/transactions/transactions.routes";
+import { userRoutes } from "./modules/users/users.routes";
 import { sendDigests, sendMonthlyReports } from "./services/cron";
 import { devAuthEnabled, consoleMailer } from "./services/dev";
 import { cloudflareMailer } from "./services/mailer";
@@ -58,7 +64,13 @@ export function createApp(deps: Deps = {}) {
       return c.json(rows);
     })
     .use(authenticate(deps))
-    .route("/", configRoutes)
+    .route("/", meRoutes)
+    .route("/", parishRoutes)
+    .route("/", referentialRoutes)
+    .route("/", userRoutes)
+    .route("/", accountRoutes)
+    .route("/", departmentRoutes)
+    .route("/", auditRoutes)
     .route("/transactions", transactionRoutes)
     .route("/banking", bankingRoutes)
     .route("/dashboard", dashboardRoutes)

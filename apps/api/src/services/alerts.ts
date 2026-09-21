@@ -3,7 +3,7 @@ import { parishes, userParishRoles, users, withScope, type Db } from "@church/db
 import { negativeBalanceEmail } from "@church/emails";
 import type { Mailer } from "./mailer";
 import { safeSend } from "./mailer";
-import { getSettings } from "./settings";
+import { getSettings } from "../modules/settings/settings.service";
 
 const SYSTEM = "00000000-0000-0000-0000-000000000000";
 
