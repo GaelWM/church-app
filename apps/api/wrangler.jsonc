@@ -41,7 +41,7 @@
       "assets": { "directory": "../web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] },
       "triggers": { "crons": ["0 17 * * *", "0 6 1 * *"] },
       "routes": [{ "pattern": "staging.eklezia.app", "custom_domain": true }],
-      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "5ab87017db4e40f994488a30009c5af3" }],
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "ecc2f71409fe4e029d65bc95c75537af" }],
       "r2_buckets": [{ "binding": "FILES", "bucket_name": "church-files-staging" }],
       "kv_namespaces": [{ "binding": "KV", "id": "89837f5787274a76b6ee2dea2b441dc4" }],
       "send_email": [{ "name": "EMAIL" }],
