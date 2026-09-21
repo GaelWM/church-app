@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { LogIn, ServerCrash, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageSpinner } from "@/components/common";
@@ -45,10 +45,11 @@ function DevAuth({ children }: { children: ReactNode }) {
 
 function Auth0Bridge({ children }: { children: ReactNode }) {
   const { getAccessTokenSilently, logout } = useAuth0();
-  const api: AuthApi = {
+  // Stable identity: consumers memoise the API client on getToken, so a new object per render would rebuild it and re-run its effects.
+  const api = useMemo<AuthApi>(() => ({
     getToken: async () => (await getAccessTokenSilently()) as string,
     logout: () => logout({ logoutParams: { returnTo: location.origin } }),
-  };
+  }), [getAccessTokenSilently, logout]);
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 const ProtectedBridge = withAuthenticationRequired(Auth0Bridge, { onRedirecting: () => <PageSpinner label="Redirection vers la connexion…" /> });
