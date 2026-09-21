@@ -35,7 +35,7 @@ async function mgmt(env: Bindings, path: string, init: RequestInit = {}) {
 
 export async function createAuth0User(env: Bindings, email: string, fullName: string) {
   if (devAuthEnabled(env)) return `dev|${email}`;
-  const password = crypto.randomUUID() + crypto.randomUUID().toUpperCase() + "!1";
+  const password = crypto.randomUUID() + crypto.randomUUID().slice(0, 8).toUpperCase() + "!1"; // 46 chars: Auth0 max is 72
   const u = await mgmt(env, "/users", {
     method: "POST",
     body: JSON.stringify({ email, name: fullName, password, connection: "Username-Password-Authentication", email_verified: false }),
