@@ -58,6 +58,8 @@ function Auth0Bridge({ children }: { children: ReactNode }) {
  */
 function Auth0Gate({ children }: { children: ReactNode }) {
   const { isLoading, isAuthenticated, error, loginWithRedirect } = useAuth0();
+  // A refresh token cached from an earlier config (different scope/audience) yields a token response with no id_token.
+  const clearAuthCache = () => Object.keys(localStorage).filter((k) => k.startsWith("@@auth0spajs@@")).forEach((k) => localStorage.removeItem(k));
   const login = () => loginWithRedirect({ appState: { returnTo: location.pathname + location.search } });
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !error) void login();
@@ -67,7 +69,7 @@ function Auth0Gate({ children }: { children: ReactNode }) {
       <ServerCrash className="size-10 text-muted-foreground" />
       <h2 className="text-xl font-semibold">Connexion impossible</h2>
       <p className="max-w-md text-center text-destructive">{error.message}</p>
-      <Button variant="outline" onClick={() => { history.replaceState({}, "", "/"); void login(); }}><RefreshCw />Réessayer</Button>
+      <Button variant="outline" onClick={() => { clearAuthCache(); history.replaceState({}, "", "/"); void login(); }}><RefreshCw />Réessayer</Button>
     </div></div>
   );
   if (isLoading || !isAuthenticated) return <PageSpinner label="Redirection vers la connexion…" />;
