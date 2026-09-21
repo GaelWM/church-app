@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
   return (
     <Auth0Provider domain={env.VITE_AUTH0_DOMAIN} clientId={env.VITE_AUTH0_CLIENT_ID}
-      authorizationParams={{ redirect_uri: window.location.origin, audience: env.VITE_AUTH0_AUDIENCE }} cacheLocation="localstorage" useRefreshTokens
+      authorizationParams={{ redirect_uri: window.location.origin, audience: env.VITE_AUTH0_AUDIENCE, scope: "openid profile email offline_access" }} cacheLocation="localstorage" useRefreshTokens
       onRedirectCallback={(appState) => history.replaceState({}, "", appState?.returnTo || "/")}>
       <Auth0Gate>{children}</Auth0Gate>
     </Auth0Provider>
