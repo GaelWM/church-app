@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../../middleware/validate";
 import { parishSchema } from "@church/shared";
 import type { AppEnv } from "../../env";
 import { parishUpdateSchema } from "./parishes.dto";

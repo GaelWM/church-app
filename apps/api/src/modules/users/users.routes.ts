@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../../middleware/validate";
 import { userCreateSchema } from "@church/shared";
 import type { AppEnv } from "../../env";
 import { userRolesSchema } from "./users.dto";

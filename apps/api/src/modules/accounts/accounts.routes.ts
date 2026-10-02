@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../../middleware/validate";
 import { accountSchema } from "@church/shared";
 import type { AppEnv } from "../../env";
 import { parishScope, requirePerm } from "../../middleware/auth";

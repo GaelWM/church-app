@@ -25,7 +25,8 @@ export function createApiClient(getToken: () => Promise<string>, getParish: () =
     const res = await fetch(`/api${path}`, { method, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, (err as any).error ?? (res.status === 403 ? "not_configured" : res.statusText));
+      const message = (err as any).error;
+      throw new ApiError(res.status, typeof message === "string" ? message : res.status === 403 ? "not_configured" : res.statusText);
     }
     return res;
   }
