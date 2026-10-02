@@ -36,6 +36,11 @@ async function assertOpenCommitment(tx: Tx, id: string, parishId: string) {
   if (!m || m.status !== "open") throw new HTTPException(422, { message: "Engagement invalide ou déjà clos" });
 }
 
+async function assertActiveInvestment(tx: Tx, id: string, parishId: string) {
+  const i = await repo.findInvestment(tx, id, parishId);
+  if (!i || !i.active) throw new HTTPException(422, { message: "Projet d'investissement invalide ou clôturé" });
+}
+
 export const list = (tx: Tx, actor: Actor, q: Filters) => repo.list(tx, q, actor.parishId);
 
 export const listPeople = async (tx: Tx, actor: Actor) =>
@@ -82,12 +87,16 @@ export async function create(tx: Tx, actor: Actor & { parishId: string }, b: Tra
     if (b.kind !== "depense") throw new HTTPException(422, { message: "Engagement réservé aux dépenses" });
     await assertOpenCommitment(tx, b.commitmentId, parishId);
   }
+  if (b.investmentId) {
+    if (b.kind !== "depense") throw new HTTPException(422, { message: "Projet d'investissement réservé aux dépenses" });
+    await assertActiveInvestment(tx, b.investmentId, parishId);
+  }
   const row = await repo.insertTransaction(tx, {
     parishId, reference, kind: b.kind, direction: b.kind === "recette" ? "in" : "out",
     accountId: b.accountId, categoryId: b.categoryId, currency, amountMinor: b.amountMinor,
     rateUsed: rate, amountUsdMinor: usd, date: b.date, status: "brouillon",
     description: b.description, beneficiary: b.beneficiary, documentNumber,
-    subCategory: b.subCategory || null, commitmentId: b.commitmentId,
+    subCategory: b.subCategory || null, commitmentId: b.commitmentId, investmentId: b.investmentId,
     departmentId: b.departmentId, memberId: b.memberId, pledgeId: b.pledgeId, enteredBy: userId,
   });
   await repo.insertDraftEvent(tx, row.id, userId);
@@ -111,6 +120,10 @@ export async function update(tx: Tx, actor: Actor, id: string, b: TransactionPat
     if (row.kind !== "depense") throw new HTTPException(422, { message: "Engagement réservé aux dépenses" });
     await assertOpenCommitment(tx, b.commitmentId, row.parishId);
   }
+  if (b.investmentId) {
+    if (row.kind !== "depense") throw new HTTPException(422, { message: "Projet d'investissement réservé aux dépenses" });
+    await assertActiveInvestment(tx, b.investmentId, row.parishId);
+  }
   let documentNumber = row.documentNumber;
   if (b.documentNumber !== undefined) documentNumber = resolvePiece(await pieceMode(tx, row.parishId), b.documentNumber, row.reference);
   const { rate, usd } = await usdEquivalent(tx, date, currency, amount);
@@ -118,7 +131,7 @@ export async function update(tx: Tx, actor: Actor, id: string, b: TransactionPat
     accountId, categoryId: b.categoryId ?? row.categoryId, date, currency, amountMinor: amount, rateUsed: rate,
     amountUsdMinor: usd, description: b.description ?? row.description, beneficiary: b.beneficiary ?? row.beneficiary,
     documentNumber, subCategory: b.subCategory !== undefined ? b.subCategory || null : row.subCategory,
-    commitmentId: b.commitmentId ?? row.commitmentId, departmentId: b.departmentId ?? row.departmentId,
+    commitmentId: b.commitmentId ?? row.commitmentId, investmentId: b.investmentId ?? row.investmentId, departmentId: b.departmentId ?? row.departmentId,
     memberId: b.memberId ?? row.memberId, pledgeId: b.pledgeId ?? row.pledgeId,
   });
   await audit(tx, { parishId: row.parishId, actorId: actor.userId, action: "transaction.update", entity: "transaction", entityId: row.id, before: row, after: upd });

@@ -1,4 +1,4 @@
-export const ROLES = ["administrateur", "caissier", "tresorier", "pasteur", "auditeur"] as const;
+export const ROLES = ["administrateur", "caissier", "tresorier", "pasteur", "auditeur", "evangelisation"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const CURRENCIES = ["CDF", "USD"] as const;
@@ -25,6 +25,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   tresorier: "Trésorier",
   pasteur: "Pasteur",
   auditeur: "Auditeur",
+  evangelisation: "Évangélisation",
 };
 
 export const STATUS_LABELS: Record<TxStatus, string> = {
@@ -65,3 +66,28 @@ export const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequestStatus, string> =
 
 export const RECORD_TYPES = ["dedication", "baptism", "marriage"] as const;
 export type RecordType = (typeof RECORD_TYPES)[number];
+
+export const BUDGET_PERIODS = ["annuel", "trimestriel", "mensuel"] as const;
+export type BudgetPeriod = (typeof BUDGET_PERIODS)[number];
+export const BUDGET_PERIOD_LABELS: Record<BudgetPeriod, string> = {
+  annuel: "Annuel", trimestriel: "Trimestriel", mensuel: "Mensuel",
+};
+
+export const INVESTMENT_TYPES = ["construction", "achat_parcelle", "materiel_mobilier", "vehicule", "sono", "autre"] as const;
+export type InvestmentType = (typeof INVESTMENT_TYPES)[number];
+export const INVESTMENT_TYPE_LABELS: Record<InvestmentType, string> = {
+  construction: "Construction", achat_parcelle: "Achat parcelle", materiel_mobilier: "Matériel & Mobilier",
+  vehicule: "Véhicule", sono: "Sono", autre: "Autre",
+};
+
+export const ASSET_TYPES = ["mobilier", "materiel", "batiment", "terrain", "vehicule", "autre"] as const;
+export type AssetType = (typeof ASSET_TYPES)[number];
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  mobilier: "Mobilier", materiel: "Matériel", batiment: "Bâtiment", terrain: "Terrain", vehicule: "Véhicule", autre: "Autre",
+};
+
+export const DEPRECIATION_METHODS = ["lineaire", "degressif"] as const;
+export type DepreciationMethod = (typeof DEPRECIATION_METHODS)[number];
+export const DEPRECIATION_METHOD_LABELS: Record<DepreciationMethod, string> = {
+  lineaire: "Linéaire", degressif: "Dégressif",
+};

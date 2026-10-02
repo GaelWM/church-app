@@ -23,8 +23,13 @@ export type AttendanceDayInput = z.infer<typeof attendanceDaySchema>;
 export const attendanceActionSchema = z.object({ comment: z.string().optional() }).optional();
 export type AttendanceActionInput = z.infer<typeof attendanceActionSchema>;
 
-export const memberSchema = z.object({ fullName: z.string().trim().min(1, "Nom requis").max(200), address: opt, whatsapp: opt, phone: opt, email: opt, homeChurch: opt, invitedBy: opt });
+const memberSinceOpt = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable().transform((v) => v || null);
+
+export const memberSchema = z.object({ fullName: z.string().trim().min(1, "Nom requis").max(200), address: opt, whatsapp: opt, phone: opt, email: opt, homeChurch: opt, invitedBy: opt, memberSince: memberSinceOpt });
 export type MemberInput = z.infer<typeof memberSchema>;
+
+export const newcomerSchema = z.object({ fullName: z.string().trim().min(1, "Nom requis").max(200), address: opt, whatsapp: opt, phone: opt, email: opt, homeChurch: opt, invitedBy: opt });
+export type NewcomerInput = z.infer<typeof newcomerSchema>;
 
 export const workerSchema = z.object({
   category: z.enum(WORKER_CATEGORIES), fullName: z.string().trim().min(1, "Nom requis").max(200), address: opt,

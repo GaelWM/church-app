@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ComponentType } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, BookOpen, Building2, CheckCheck, ChevronDown, Handshake, Landmark, LayoutDashboard, LogOut, Menu, Settings, Users, WifiOff, Eye, Baby, Droplets, Heart, FileBarChart } from "lucide-react";
+import { Archive, ArrowDownToLine, ArrowUpFromLine, BookOpen, Building2, CheckCheck, ChevronDown, Handshake, Landmark, LayoutDashboard, LogOut, Menu, PiggyBank, Settings, Users, WifiOff, Eye, Baby, Droplets, Heart, FileBarChart } from "lucide-react";
 import { Banner } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -16,20 +16,25 @@ import { PAGE_TITLES } from "./routes";
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   "/": LayoutDashboard, "/recettes": ArrowDownToLine, "/depenses": ArrowUpFromLine, "/banques": Landmark, "/journal": BookOpen,
-  "/engagements": Handshake, "/effectifs": Users, "/validation": CheckCheck, "/dedicaces": Baby, "/baptemes": Droplets, "/mariages": Heart, "/rapports": FileBarChart, "/configuration": Settings,
+  "/engagements": Handshake, "/budget": PiggyBank, "/immobilisations": Archive, "/effectifs": Users, "/validation": CheckCheck,
+  "/dedicaces": Baby, "/baptemes": Droplets, "/mariages": Heart, "/rapports": FileBarChart, "/configuration": Settings,
 };
 
 const NAV_GROUPS: { title?: string; items: string[] }[] = [
   { items: ["/"] },
   { title: "Saisie", items: ["/recettes", "/depenses", "/engagements", "/effectifs"] },
   { title: "Registres", items: ["/dedicaces", "/baptemes", "/mariages"] },
-  { title: "Contrôle", items: ["/banques", "/journal", "/rapports", "/validation"] },
+  { title: "Contrôle", items: ["/banques", "/journal", "/budget", "/immobilisations", "/rapports", "/validation"] },
   { title: "Administration", items: ["/configuration"] },
 ];
 
 function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   const s = useSession();
+  // Everyone except Évangélisation can read financial data (see transactions.routes.ts's canRead gate).
+  const canSeeFinances = s.can("transaction.readAll") || s.can("transaction.readOwn");
   const visible: Record<string, boolean> = {
+    "/recettes": canSeeFinances, "/depenses": canSeeFinances, "/banques": canSeeFinances, "/journal": canSeeFinances, "/engagements": canSeeFinances,
+    "/budget": s.can("transaction.readAll"), "/immobilisations": s.can("transaction.readAll"),
     "/validation": s.can("transaction.validate1") || s.can("transaction.validate2") || s.can("transaction.readAll") || s.can("change.request"),
     "/rapports": s.can("report.export") || s.can("transaction.readAll"),
     "/configuration": s.roles.includes("administrateur") || s.can("audit.view"),

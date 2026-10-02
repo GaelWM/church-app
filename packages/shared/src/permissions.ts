@@ -13,8 +13,10 @@ export const PERMISSIONS = [
   "audit.view",
   "period.close",
   "reconcile",
-  "registry.write", // dédicaces, baptêmes, mariages, membres, ouvriers
+  "registry.write", // dédicaces, baptêmes, mariages, membres, nouveaux venus, ouvriers
   "change.request", // demander une modification / annulation
+  "budget.manage", // lignes de budget des dépenses et projets d'investissement
+  "asset.manage", // registre des immobilisations
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -28,9 +30,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "report.export",
     "audit.view",
     "registry.write",
+    "asset.manage",
   ],
   caissier: ["transaction.create", "transaction.readOwn", "change.request", "registry.write"],
-  tresorier: ["transaction.validate1", "transaction.readAll", "report.export", "reconcile"],
+  tresorier: ["transaction.validate1", "transaction.readAll", "report.export", "reconcile", "budget.manage", "asset.manage"],
   pasteur: [
     "transaction.validate2",
     "transaction.readAll",
@@ -38,9 +41,13 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "audit.view",
     "period.close",
     "registry.write",
+    "budget.manage",
+    "asset.manage",
   ],
   // Consultation générale uniquement: no entry, no validation.
   auditeur: ["transaction.readAll", "report.export", "audit.view"],
+  // Effectifs, dédicace, baptême, mariage uniquement: aucun accès financier (saisie, banque, journal, engagements, compta).
+  evangelisation: ["registry.write"],
 };
 
 export function can(roles: readonly Role[], permission: Permission): boolean {

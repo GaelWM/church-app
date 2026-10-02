@@ -3,10 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/common";
 import { AttendanceTab } from "./AttendanceTab";
+import { NewcomersTab } from "./NewcomersTab";
 import { MembersTab } from "./MembersTab";
 import { WorkersTab } from "./WorkersTab";
 
-const TABS = [["cultes", "Effectifs des cultes"], ["membres", "Membres"], ["ouvriers", "Ouvriers"]] as const;
+const TABS = [["cultes", "Effectifs des cultes"], ["nouveaux", "Nouveaux venus"], ["membres", "Membres"], ["ouvriers", "Ouvriers"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export function EffectifsPage() {
@@ -21,6 +22,7 @@ export function EffectifsPage() {
         <TabsList variant="line">{TABS.map(([k, l]) => <TabsTrigger key={k} value={k}>{l}</TabsTrigger>)}</TabsList>
       </Tabs>
       {tab === "cultes" && <AttendanceTab />}
+      {tab === "nouveaux" && <NewcomersTab />}
       {tab === "membres" && <MembersTab />}
       {tab === "ouvriers" && <WorkersTab />}
     </>

@@ -86,6 +86,25 @@ d("Effectifs, membres, ouvriers", () => {
     expect((await call("caissier", "DELETE", `/members/${m.id}`)).status).toBe(200);
   });
 
+  test("members: memberSince round-trips and is independent from newcomers", async () => {
+    const created = await call("caissier", "POST", "/members", { fullName: "Alice Membre", memberSince: "2020-05-01" });
+    expect(created.status).toBe(201);
+    const m = await json(created);
+    expect(m.memberSince).toBe("2020-05-01");
+  });
+
+  test("newcomers: caissier CRUD, auditeur read-only, parish isolation, distinct from members", async () => {
+    const created = await call("caissier", "POST", "/newcomers", { fullName: "Jean Nouveau", homeChurch: "Église X", invitedBy: "Marie" });
+    expect(created.status).toBe(201);
+    const n = await json(created);
+    expect((await call("caissier", "PUT", `/newcomers/${n.id}`, { fullName: "Jean N.", address: "Av. 1" })).status).toBe(200);
+    expect((await json(await call("auditeur", "GET", "/newcomers"))).some((x: any) => x.id === n.id)).toBe(true);
+    expect((await call("auditeur", "POST", "/newcomers", { fullName: "X" })).status).toBe(403);
+    expect((await json(await call("auditeur", "GET", "/members"))).some((x: any) => x.id === n.id)).toBe(false);
+    expect((await json(await call("caissierB", "GET", "/newcomers", undefined, ids.parishB))).some((x: any) => x.id === n.id)).toBe(false);
+    expect((await call("caissier", "DELETE", `/newcomers/${n.id}`)).status).toBe(200);
+  });
+
   test("workers: caissier CRUD, department must belong to the parish, auditeur read-only, isolation", async () => {
     const bad = await call("caissier", "POST", "/workers", { category: "ouvrier", fullName: "Paul", departmentId: ids.deptB });
     expect(bad.status).toBe(422);

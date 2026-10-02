@@ -12,6 +12,8 @@ import { DepensesPage } from "../features/depenses";
 import { BanquesPage } from "../features/banques/BanquesPage";
 import { JournalPage } from "../features/journal/JournalPage";
 import { EngagementsPage } from "../features/engagements/EngagementsPage";
+import { BudgetPage } from "../features/budget/BudgetPage";
+import { ImmobilisationsPage } from "../features/immobilisations/ImmobilisationsPage";
 import { EffectifsPage } from "../features/effectifs/EffectifsPage";
 import { DedicacesPage } from "../features/registres/DedicacesPage";
 import { BaptemesPage } from "../features/registres/BaptemesPage";
@@ -58,6 +60,15 @@ function Guard({ allow, children }: { allow: (s: ReturnType<typeof useSession>) 
   return allow(s) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
+/** Any role that can read financial data (everyone except Évangélisation) — see Layout.tsx's NAV_GROUPS visibility. */
+const canSeeFinances = (s: ReturnType<typeof useSession>) => s.can("transaction.readAll") || s.can("transaction.readOwn");
+
+/** The index route is the Dashboard for financial roles; Évangélisation lands on Effectifs instead (no balances to show it). */
+function Index() {
+  const s = useSession();
+  return canSeeFinances(s) ? <DashboardPage /> : <Navigate to="/effectifs" replace />;
+}
+
 function Gate() {
   const me = useMe();
   if (me.isLoading) return <PageSpinner label="Chargement de votre session…" />;
@@ -75,12 +86,14 @@ function Gate() {
       <ParishSync />
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="recettes" element={<RecettesPage />} />
-          <Route path="depenses" element={<DepensesPage />} />
-          <Route path="banques" element={<BanquesPage />} />
-          <Route path="journal" element={<JournalPage rowActions={(r) => <RequestChangeButton tx={{ ...r, parishId: "", rateUsed: "", amountUsdMinor: "", departmentId: null } as unknown as Tx} />} />} />
-          <Route path="engagements" element={<EngagementsPage />} />
+          <Route index element={<Index />} />
+          <Route path="recettes" element={<Guard allow={canSeeFinances}><RecettesPage /></Guard>} />
+          <Route path="depenses" element={<Guard allow={canSeeFinances}><DepensesPage /></Guard>} />
+          <Route path="banques" element={<Guard allow={canSeeFinances}><BanquesPage /></Guard>} />
+          <Route path="journal" element={<Guard allow={canSeeFinances}><JournalPage rowActions={(r) => <RequestChangeButton tx={{ ...r, parishId: "", rateUsed: "", amountUsdMinor: "", departmentId: null } as unknown as Tx} />} /></Guard>} />
+          <Route path="engagements" element={<Guard allow={canSeeFinances}><EngagementsPage /></Guard>} />
+          <Route path="budget" element={<Guard allow={(s) => s.can("transaction.readAll")}><BudgetPage /></Guard>} />
+          <Route path="immobilisations" element={<Guard allow={(s) => s.can("transaction.readAll")}><ImmobilisationsPage /></Guard>} />
           <Route path="effectifs" element={<EffectifsPage />} />
           <Route path="dedicaces" element={<DedicacesPage />} />
           <Route path="baptemes" element={<BaptemesPage />} />

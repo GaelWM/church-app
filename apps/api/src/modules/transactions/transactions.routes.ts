@@ -2,18 +2,20 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { rejectSchema, transactionInputSchema } from "@church/shared";
 import type { AppEnv } from "../../env";
-import { parishScope, requirePerm } from "../../middleware/auth";
+import { parishScope, requireAnyPerm, requirePerm } from "../../middleware/auth";
 import { balanceQuerySchema, batchBodySchema, filterSchema, transactionPatchSchema } from "./transactions.dto";
 import * as ctrl from "./transactions.controller";
 
+const canRead = requireAnyPerm("transaction.readAll", "transaction.readOwn");
+
 export const transactionRoutes = new Hono<AppEnv>()
   .use(parishScope)
-  .get("/", zValidator("query", filterSchema.passthrough()), (c) => ctrl.list(c, c.req.valid("query")))
-  .get("/config", ctrl.getConfig)
-  .get("/people", ctrl.listPeople)
-  .get("/balance", zValidator("query", balanceQuerySchema), (c) => ctrl.getBalance(c, c.req.valid("query")))
-  .get("/journal", zValidator("query", filterSchema.passthrough()), (c) => ctrl.journal(c, c.req.valid("query")))
-  .get("/:id", ctrl.getOne)
+  .get("/", canRead, zValidator("query", filterSchema.passthrough()), (c) => ctrl.list(c, c.req.valid("query")))
+  .get("/config", canRead, ctrl.getConfig)
+  .get("/people", canRead, ctrl.listPeople)
+  .get("/balance", canRead, zValidator("query", balanceQuerySchema), (c) => ctrl.getBalance(c, c.req.valid("query")))
+  .get("/journal", canRead, zValidator("query", filterSchema.passthrough()), (c) => ctrl.journal(c, c.req.valid("query")))
+  .get("/:id", canRead, ctrl.getOne)
   .post("/", requirePerm("transaction.create"), zValidator("json", transactionInputSchema), (c) => ctrl.create(c, c.req.valid("json")))
   .patch("/:id", requirePerm("transaction.create"), zValidator("json", transactionPatchSchema), (c) => ctrl.update(c, c.req.valid("json")))
   .delete("/:id", requirePerm("transaction.create"), ctrl.remove)

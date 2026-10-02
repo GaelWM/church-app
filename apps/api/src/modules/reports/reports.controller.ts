@@ -57,6 +57,11 @@ export const membres = async (c: C, q: ReportQuery) => {
   return c.json(await run(c, (tx) => service.membres(tx, actor, q)));
 };
 
+export const nouveauxVenus = async (c: C, q: ReportQuery) => {
+  const actor = actorOf(c);
+  return c.json(await run(c, (tx) => service.nouveauxVenus(tx, actor, q)));
+};
+
 export const ouvriers = async (c: C, q: ReportQuery) => {
   const actor = actorOf(c);
   return c.json(await run(c, (tx) => service.ouvriers(tx, actor, q)));

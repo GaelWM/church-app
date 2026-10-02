@@ -3,7 +3,7 @@ import type { TxAction } from "@church/shared";
 import type { AppEnv } from "../../env";
 import { requireParish } from "../../middleware/auth";
 import { run } from "../../services/run";
-import type { AttendanceActionInput, AttendanceDayInput, AttendanceInput, AttendanceQuery, MemberInput, WorkerInput } from "./effectifs.dto";
+import type { AttendanceActionInput, AttendanceDayInput, AttendanceInput, AttendanceQuery, MemberInput, NewcomerInput, WorkerInput } from "./effectifs.dto";
 import * as service from "./effectifs.service";
 import { assertDistinctCultes } from "./effectifs.service";
 
@@ -51,6 +51,26 @@ export const updateMember = async (c: C, body: MemberInput) => {
 export const deleteMember = async (c: C) => {
   const actor = actorOf(c);
   return c.json(await run(c, (tx) => service.deleteMember(tx, actor, c.req.param("id")!)));
+};
+
+export const listNewcomers = async (c: C) => {
+  const actor = actorOf(c);
+  return c.json(await run(c, (tx) => service.listNewcomers(tx, actor)));
+};
+
+export const createNewcomer = async (c: C, body: NewcomerInput) => {
+  const actor = actorOf(c);
+  return c.json(await run(c, (tx) => service.createNewcomer(tx, actor, body)), 201);
+};
+
+export const updateNewcomer = async (c: C, body: NewcomerInput) => {
+  const actor = actorOf(c);
+  return c.json(await run(c, (tx) => service.updateNewcomer(tx, actor, c.req.param("id")!, body)));
+};
+
+export const deleteNewcomer = async (c: C) => {
+  const actor = actorOf(c);
+  return c.json(await run(c, (tx) => service.deleteNewcomer(tx, actor, c.req.param("id")!)));
 };
 
 export const listWorkers = async (c: C) => {

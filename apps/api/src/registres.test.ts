@@ -60,6 +60,15 @@ d("registres (dédicaces, baptêmes, mariages)", () => {
     }
   });
 
+  test("marriages: godparent fields round-trip, dedication pastor name is free text", async () => {
+    const m = await (await call("caissier", "POST", "/marriages", { husbandName: "H2", wifeName: "W2", date: "2026-01-10", godfatherName: "Parrain P", godmotherName: "Marraine M" })).json() as any;
+    expect(m.godfatherName).toBe("Parrain P");
+    expect(m.godmotherName).toBe("Marraine M");
+    // Dédicace: "Nom du pasteur officiant" accepts any free text, not just a registered pasteur user.
+    const d = await (await call("caissier", "POST", "/dedications", { ...dedic, pastorName: "Pasteur invité (hors système)" })).json() as any;
+    expect(d.pastorName).toBe("Pasteur invité (hors système)");
+  });
+
   test("validation: missing name, absurd future date, unknown register", async () => {
     expect((await call("caissier", "POST", "/dedications", { ...dedic, childName: "" })).status).toBe(400);
     expect((await call("caissier", "POST", "/dedications", { ...dedic, date: "2099-01-01" })).status).toBe(400);

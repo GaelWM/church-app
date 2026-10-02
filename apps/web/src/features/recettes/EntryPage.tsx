@@ -34,6 +34,7 @@ const schema = z.object({
   pledgeId: z.string().optional(),
   subCategory: z.string().optional(),
   commitmentId: z.string().optional(),
+  investmentId: z.string().optional(),
 });
 /** Exact minor units -> "1234,56" for the amount input (no float). */
 const exactAmount = (minor: string) => { const s = BigInt(minor).toString().padStart(3, "0"); return `${s.slice(0, -2)},${s.slice(-2)}`; };
@@ -178,6 +179,8 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
   const cfg = useQuery({ queryKey: useScopedKey("tx-config"), queryFn: () => api.get<{ pieceNumberMode: "manual" | "auto" | "mixed" }>("/transactions/config") });
   const pieceMode = cfg.data?.pieceNumberMode ?? "mixed";
   const commitments = useQuery({ queryKey: useScopedKey("commitments"), queryFn: () => api.get<{ id: string; payee: string; currency: string; amountMinor: string; status: string }[]>("/engagements/commitments"), enabled: !isRecette });
+  // Budget d'investissement: dépense-only, optional link to the project this spending relates to.
+  const investments = useQuery({ queryKey: useScopedKey("investment-options"), queryFn: () => api.get<{ id: string; name: string; year: number; currency: string }[]>("/budget/investments/options"), enabled: !isRecette });
   const pledges = useQuery({ queryKey: useScopedKey("pledges"), queryFn: () => api.get<{ id: string; donorName?: string; categoryId: string }[]>("/engagements/pledges"), enabled: isRecette });
 
   const { register, control, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
@@ -189,6 +192,7 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
           beneficiary: editing.beneficiary ?? "", documentNumber: editing.documentNumber ?? "", departmentId: editing.departmentId ?? "",
           memberId: editing.memberId ?? "", pledgeId: editing.pledgeId ?? "",
           subCategory: editing.subCategory ?? "", commitmentId: editing.commitmentId ?? "",
+          investmentId: (editing as unknown as { investmentId?: string | null }).investmentId ?? "",
         }
       : { date: today(), accountId: "", categoryId: "", amount: "" },
   });
@@ -209,6 +213,7 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
         beneficiary: f.beneficiary || undefined, documentNumber: f.documentNumber || undefined,
         departmentId: f.departmentId || undefined, memberId: f.memberId || undefined, pledgeId: f.pledgeId || undefined,
         subCategory: f.subCategory || undefined, commitmentId: !isRecette ? f.commitmentId || undefined : undefined,
+        investmentId: !isRecette ? f.investmentId || undefined : undefined,
       };
       if (editing) return api.patch<Tx>(`/transactions/${editing.id}`, body);
       try {
@@ -252,6 +257,9 @@ function EntryForm({ kind, editing, onClose, onOfflineSaved }: { kind: "recette"
         {!isRecette && <Field label="Bénéficiaire"><Input {...register("beneficiary")} /></Field>}
         {!isRecette && !!commitments.data?.some((m) => m.status === "open") && (
           <Field label="Engagement associé (optionnel)"><FormSelect control={control} name="commitmentId" options={[{ value: "", label: "—" }, ...commitments.data.filter((m) => m.status === "open" || m.id === editing?.commitmentId).map((m) => ({ value: m.id, label: `${m.payee} · ${money(m.amountMinor, m.currency as Currency)}` }))]} /></Field>
+        )}
+        {!isRecette && !!investments.data?.length && (
+          <Field label="Projet d'investissement (optionnel)"><FormSelect control={control} name="investmentId" options={[{ value: "", label: "—" }, ...investments.data.map((i) => ({ value: i.id, label: `${i.name} (${i.year})` }))]} /></Field>
         )}
         {pieceMode === "auto"
           ? <Field label="N° pièce"><Input disabled placeholder="Généré automatiquement" value={editing?.documentNumber ?? ""} readOnly /></Field>

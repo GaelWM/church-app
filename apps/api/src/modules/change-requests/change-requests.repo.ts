@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { categories, changeRequestEvents, changeRequests, departments, transactionEvents, transactions, users, type Tx } from "@church/db";
+import { budgetInvestments, categories, changeRequestEvents, changeRequests, departments, transactionEvents, transactions, users, type Tx } from "@church/db";
 import { inList } from "../../services/sql";
 
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -81,6 +81,11 @@ export async function findCategory(tx: Tx, id: string) {
 export async function findDepartmentInParish(tx: Tx, id: string, parishId: string) {
   const [d] = await tx.select().from(departments).where(and(eq(departments.id, id), eq(departments.parishId, parishId)));
   return d;
+}
+
+export async function findInvestmentInParish(tx: Tx, id: string, parishId: string) {
+  const [i] = await tx.select().from(budgetInvestments).where(and(eq(budgetInvestments.id, id), eq(budgetInvestments.parishId, parishId)));
+  return i;
 }
 
 /** Lets the DB trigger accept edits to a validated entry for the rest of this transaction. */

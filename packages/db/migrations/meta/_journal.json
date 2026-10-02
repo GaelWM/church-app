@@ -15,6 +15,13 @@
       "when": 1789926184540,
       "tag": "0001_registers_and_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790966668751,
+      "tag": "0002_budget_and_assets",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ if (!p) [p] = await db.insert(parishes).values({ name: "Paroisse Centrale (démo
 
 const demo = [
   ["administrateur", "Alice Administrateur"], ["caissier", "Claude Caissier"],
-  ["tresorier", "Thérèse Trésorière"], ["pasteur", "Paul Pasteur"],
+  ["tresorier", "Thérèse Trésorière"], ["pasteur", "Paul Pasteur"], ["evangelisation", "Esther Évangélisation"],
 ] as const;
 for (const [role, fullName] of demo) {
   const auth0Id = `dev|${role}`;
@@ -27,7 +27,10 @@ if (!(await db.select().from(accounts).where(eq(accounts.parishId, p!.id))).leng
     { parishId: p!.id, type: "banque", currency: "USD", name: "Banque USD", bankName: "Rawbank", number: "0001-234" },
     { parishId: p!.id, type: "mobile_money", currency: "CDF", name: "M-Pesa", bankName: "Vodacom" },
   ]);
-  await db.insert(departments).values([{ parishId: p!.id, name: "Jeunesse" }, { parishId: p!.id, name: "Mamans" }, { parishId: p!.id, name: "Chorale" }]);
+  await db.insert(departments).values([
+    "Intercession", "Evangélisation", "Chorale", "Protocole", "Ecodim", "13-17", "Jeunesse", "Grand jeune",
+    "Partenariat", "Femme", "Nettoyage et décoration", "Social", "Secrétariat & adm",
+  ].map((name) => ({ parishId: p!.id, name })));
   await db.insert(members).values([{ parishId: p!.id, fullName: "Marie Kabila" }, { parishId: p!.id, fullName: "Jean Mbuyi" }]);
 }
 if (!(await db.select().from(exchangeRates)).length) await db.insert(exchangeRates).values({ rateCdfPerUsd: "2800", effectiveFrom: "2020-01-01" });

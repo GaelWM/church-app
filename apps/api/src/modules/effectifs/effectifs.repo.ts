@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
-import { attendanceRecords, departments, members, workers, type Tx } from "@church/db";
-import type { AttendanceQuery, Counts, MemberInput, WorkerInput } from "./effectifs.dto";
+import { attendanceRecords, departments, members, newcomers, workers, type Tx } from "@church/db";
+import type { AttendanceQuery, Counts, MemberInput, NewcomerInput, WorkerInput } from "./effectifs.dto";
 
 // Attendance
 export const listAttendance = (tx: Tx, q: AttendanceQuery) => {
@@ -53,6 +53,29 @@ export async function updateMember(tx: Tx, id: string, b: MemberInput) {
 
 export async function deleteMember(tx: Tx, id: string, parishId: string) {
   const [old] = await tx.delete(members).where(and(eq(members.id, id), eq(members.parishId, parishId))).returning();
+  return old;
+}
+
+// Newcomers ("Nouveaux venus"): distinct from `members`, no financial linkage.
+export const listNewcomers = (tx: Tx) => tx.select().from(newcomers).orderBy(newcomers.fullName);
+
+export async function insertNewcomer(tx: Tx, parishId: string, b: NewcomerInput) {
+  const [n] = await tx.insert(newcomers).values({ parishId, ...b }).returning();
+  return n!;
+}
+
+export async function findNewcomer(tx: Tx, id: string, parishId: string) {
+  const [old] = await tx.select().from(newcomers).where(and(eq(newcomers.id, id), eq(newcomers.parishId, parishId)));
+  return old;
+}
+
+export async function updateNewcomer(tx: Tx, id: string, b: NewcomerInput) {
+  const [n] = await tx.update(newcomers).set(b).where(eq(newcomers.id, id)).returning();
+  return n!;
+}
+
+export async function deleteNewcomer(tx: Tx, id: string, parishId: string) {
+  const [old] = await tx.delete(newcomers).where(and(eq(newcomers.id, id), eq(newcomers.parishId, parishId))).returning();
   return old;
 }
 

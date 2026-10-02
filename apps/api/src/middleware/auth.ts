@@ -73,6 +73,14 @@ export const requirePerm = (perm: Permission) =>
     await next();
   });
 
+/** Passes if the caller holds any one of the listed permissions. */
+export const requireAnyPerm = (...perms: Permission[]) =>
+  createMiddleware<AppEnv>(async (c, next) => {
+    const roles = c.get("roles");
+    if (!perms.some((p) => can(roles, p))) throw new HTTPException(403, { message: "Permission refusée" });
+    await next();
+  });
+
 export function requireParish(c: { get: (k: "parishId") => string | null }): string {
   const id = c.get("parishId");
   if (!id) throw new HTTPException(400, { message: "Sélectionnez une paroisse" });

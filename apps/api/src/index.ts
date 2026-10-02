@@ -8,11 +8,13 @@ import { accountRoutes } from "./modules/accounts/accounts.routes";
 import { attachmentRoutes } from "./modules/attachments/attachments.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
 import { bankingRoutes } from "./modules/banking/banking.routes";
+import { budgetRoutes } from "./modules/budget/budget.routes";
 import { changeRequestRoutes } from "./modules/change-requests/change-requests.routes";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes";
 import { departmentRoutes } from "./modules/departments/departments.routes";
 import { effectifRoutes } from "./modules/effectifs/effectifs.routes";
 import { engagementRoutes } from "./modules/engagements/engagements.routes";
+import { assetRoutes } from "./modules/immobilisations/immobilisations.routes";
 import { meRoutes } from "./modules/me/me.routes";
 import { parishRoutes } from "./modules/parishes/parishes.routes";
 import { referentialRoutes } from "./modules/referential/referential.routes";
@@ -75,6 +77,8 @@ export function createApp(deps: Deps = {}) {
     .route("/banking", bankingRoutes)
     .route("/dashboard", dashboardRoutes)
     .route("/engagements", engagementRoutes)
+    .route("/budget", budgetRoutes)
+    .route("/immobilisations", assetRoutes)
     .route("/change-requests", changeRequestRoutes)
     .route("/settings", settingsRoutes)
     .route("/registres", registreRoutes)

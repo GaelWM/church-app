@@ -1,10 +1,12 @@
 import { useMemo, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, Check, ChevronsUpDown, CircleCheck, CircleX, Clock, FilePen, Inbox, Info, Save, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, Check, ChevronsUpDown, CircleCheck, CircleX, Clock, FileDown, FilePen, FileSpreadsheet, FileText, Inbox, Info, Printer, Save, ShieldCheck } from "lucide-react";
 import { flexRender, getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { parseAmount, STATUS_LABELS, type Currency, type TxStatus } from "@church/shared";
+import { exportTable, type ExportSpec } from "@/lib/export-table";
+import { useSession } from "../core/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -341,5 +343,19 @@ export function ReasonButton({ label, onConfirm, danger, icon: Icon }: { label: 
       <Button size="sm" variant={danger ? "destructive" : "default"} onClick={() => setOpen(true)}>{Icon && <Icon />}{label}</Button>
       <ReasonDialog open={open} onOpenChange={setOpen} title={label} destructive={danger} onConfirm={onConfirm} />
     </>
+  );
+}
+
+/** Excel / CSV / PDF / print buttons, shown only to users allowed to export (§18). */
+export function ExportButtons({ spec }: { spec: () => ExportSpec }) {
+  const s = useSession();
+  if (!s.can("report.export")) return null;
+  return (
+    <span className="flex items-center gap-1">
+      <Button size="sm" variant="outline" onClick={() => exportTable("xlsx", spec())}><FileSpreadsheet />Excel</Button>
+      <Button size="sm" variant="outline" onClick={() => exportTable("csv", spec())}><FileDown />CSV</Button>
+      <Button size="sm" variant="outline" onClick={() => exportTable("pdf", spec())}><FileText />PDF</Button>
+      <Button size="sm" variant="outline" onClick={() => exportTable("print", spec())}><Printer />Imprimer</Button>
+    </span>
   );
 }

@@ -108,7 +108,13 @@ export async function attendanceRows(tx: Tx, q: Q, parishId: string | null, fiel
 
 export async function memberRows(tx: Tx, q: Q, parishId: string | null) {
   return await tx.execute(sql`
-      select id, full_name, phone, whatsapp, email, address, home_church, invited_by, created_at::date::text as since from members
+      select id, full_name, phone, whatsapp, email, address, member_since::text as since from members
+      where ${parishId ? sql`parish_id = ${parishId}::uuid` : sql`true`} ${q.q ? sql`and full_name ilike ${"%" + q.q + "%"}` : sql``} order by full_name`);
+}
+
+export async function newcomerRows(tx: Tx, q: Q, parishId: string | null) {
+  return await tx.execute(sql`
+      select id, full_name, phone, whatsapp, email, address, home_church, invited_by, created_at::date::text as date from newcomers
       where ${parishId ? sql`parish_id = ${parishId}::uuid` : sql`true`} ${q.q ? sql`and full_name ilike ${"%" + q.q + "%"}` : sql``} order by full_name`);
 }
 

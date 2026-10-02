@@ -3,18 +3,17 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileText, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, DataTable, ErrorNote, Field, FormFooter, FormGrid, ModalForm } from "@/components/common";
+import { Card, DataTable, ErrorNote, ExportButtons, Field, FormFooter, FormGrid, ModalForm } from "@/components/common";
 import { useApi } from "../../core/api";
 import { useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { fmtDate, money } from "../../core/format";
 import type { Tx } from "../../core/types";
 import { exportTable } from "@/lib/export-table";
 import { useSession } from "../../core/session";
-import { OptionSelect } from "@/components/form-controls";
-import { ExportButtons } from "./ExportButtons";
+import { DatePicker, dateLimits } from "@/components/form-controls";
 
-export interface Member { id: string; fullName: string; address?: string | null; whatsapp?: string | null; phone?: string | null; email?: string | null; homeChurch?: string | null; invitedBy?: string | null }
-const FIELDS = [["fullName", "Nom complet"], ["address", "Adresse"], ["whatsapp", "WhatsApp"], ["phone", "Téléphone"], ["email", "Email"], ["homeChurch", "Église d'attache"], ["invitedBy", "Personne ayant invité"]] as const;
+export interface Member { id: string; fullName: string; address?: string | null; whatsapp?: string | null; phone?: string | null; email?: string | null; memberSince?: string | null }
+const FIELDS = [["fullName", "Nom complet"], ["address", "Adresse"], ["whatsapp", "WhatsApp"], ["phone", "Téléphone"], ["email", "Email"], ["memberSince", "Membre depuis"]] as const;
 type Mode = null | "choose" | "pick" | { edit: Member | null };
 const norm = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
@@ -41,7 +40,8 @@ export function MembersTab() {
   const del = useMutation({ mutationFn: (id: string) => api.del(`/effectifs/members/${id}`), onSuccess: invalidate });
   const rows = useMemo(() => (list.data ?? []).filter((m) => !q || norm(FIELDS.map(([k]) => m[k] ?? "").join(" ")).includes(norm(q))), [list.data, q]);
   const spec = () => ({
-    title: "Liste des membres", columns: FIELDS.map(([key, header]) => ({ header, key })), rows: rows.map((m) => ({ ...m })),
+    title: "Liste des membres", columns: FIELDS.map(([key, header]) => ({ header, key })),
+    rows: rows.map((m) => ({ ...m, memberSince: fmtDate(m.memberSince) })),
   });
   const close = () => setMode(null);
   return (
@@ -50,7 +50,7 @@ export function MembersTab() {
         <div className="mb-3 relative max-w-sm"><Search className="absolute left-2 top-2 size-4 text-muted-foreground" /><Input className="pl-8" placeholder="Rechercher…" aria-label="Rechercher un membre" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <ErrorNote error={del.error} />
         <DataTable<Member> rows={rows} loading={list.isLoading} emptyIcon={Users} empty="Aucun membre enregistré" pageSize={25} columns={[
-          ...FIELDS.map(([k, h]) => ({ header: h, cell: (m: Member) => m[k] ?? "", sort: (m: Member) => m[k] })),
+          ...FIELDS.map(([k, h]) => ({ header: h, cell: (m: Member) => (k === "memberSince" ? fmtDate(m[k]) : m[k]) ?? "", sort: (m: Member) => m[k] })),
           { header: "", cell: (m) => (
             <span className="actions">
               {s.can("report.export") && <Button size="sm" variant="outline" onClick={() => statement(m)}><FileText />Relevé annuel PDF</Button>}
@@ -70,7 +70,7 @@ export function MembersTab() {
         <Picker members={list.data ?? []} onPick={(m) => setMode({ edit: m })} />
       </ModalForm>
       <ModalForm open={typeof mode === "object" && mode !== null} onOpenChange={(o) => !o && close()} title={typeof mode === "object" && mode?.edit ? "Modifier le membre" : "Nouveau membre"}>
-        {typeof mode === "object" && mode && <MemberForm key={mode.edit?.id ?? "new"} member={mode.edit} members={list.data ?? []} onClose={close} />}
+        {typeof mode === "object" && mode && <MemberForm key={mode.edit?.id ?? "new"} member={mode.edit} onClose={close} />}
       </ModalForm>
     </>
   );
@@ -90,22 +90,18 @@ function Picker({ members, onPick }: { members: Member[]; onPick: (m: Member) =>
   );
 }
 
-function MemberForm({ member, members, onClose }: { member: Member | null; members: Member[]; onClose: () => void }) {
+function MemberForm({ member, onClose }: { member: Member | null; onClose: () => void }) {
   const api = useApi();
   const invalidate = useInvalidateLedger();
   const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(FIELDS.map(([k]) => [k, member?.[k] ?? ""])));
   const [err, setErr] = useState("");
   const save = useMutation({ mutationFn: () => (member ? api.put(`/effectifs/members/${member.id}`, v) : api.post("/effectifs/members", v)), onSuccess: () => { invalidate(); onClose(); } });
-  // "Personne ayant invité": pick an existing member (not the member being edited); a name already stored stays selectable.
-  const inviters = members.filter((m) => m.id !== member?.id).map((m) => m.fullName);
-  if (v.invitedBy && !inviters.includes(v.invitedBy)) inviters.push(v.invitedBy);
-  const inviterOptions = [{ value: "", label: "—" }, ...inviters.sort((a, b) => a.localeCompare(b, "fr")).map((n) => ({ value: n, label: n }))];
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!v.fullName!.trim()) return setErr("Nom requis"); setErr(""); save.mutate(); }} noValidate>
       <FormGrid>
         {FIELDS.map(([k, h]) => <Field key={k} label={h} error={k === "fullName" ? err : undefined}>
-          {k === "invitedBy"
-            ? <OptionSelect value={v[k]!} onValueChange={(x) => setV({ ...v, [k]: x })} options={inviterOptions} />
+          {k === "memberSince"
+            ? <DatePicker value={v[k]!} onChange={(iso) => setV({ ...v, [k]: iso })} clearable max={dateLimits.past().max} />
             : <Input autoFocus={k === "fullName"} value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} />}
         </Field>)}
       </FormGrid>

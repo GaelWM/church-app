@@ -7,7 +7,7 @@ export const RECETTE_CATEGORIES = [
 
 export const DEPENSE_CATEGORIES: Record<string, string[]> = {
   "Locaux et charges": ["Loyer", "Eau", "Electricité", "Internet", "Assurance", "Entretien et réparation"],
-  Administration: ["Frais administratifs", "Taxes", "Impression", "Communication", "Transport"],
+  Administration: ["Frais administratifs", "Taxes", "Impression", "Communication", "Transport", "Carburant"],
   Personnel: ["Salaires et primes"],
   Ministère: ["Activités Eglise", "Activité culte (Sainte Cène...)", "Conventions et séminaires", "Aide sociale", "Dîme des dîmes"],
   Equipement: ["Mobilier", "Matériel", "Petit matériel et outillage"],

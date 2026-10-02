@@ -65,6 +65,7 @@ export const transactionInputSchema = z.object({
   pledgeId: uuid.optional(),
   subCategory: z.string().trim().max(200).optional(),
   commitmentId: uuid.optional(), // dépense only: open engagement this payment relates to
+  investmentId: uuid.optional(), // dépense only: budget d'investissement project this spending relates to
 });
 
 export const rejectSchema = z.object({ comment: z.string().min(1) });
@@ -82,6 +83,7 @@ export const changeRequestInputSchema = z.object({
     subCategory: z.string().nullable().optional(),
     categoryId: uuid.nullable().optional(),
     departmentId: uuid.nullable().optional(),
+    investmentId: uuid.nullable().optional(),
   }).strict().optional(),
 });
 export const changeRequestDecisionSchema = z.object({ comment: z.string().trim().optional() });

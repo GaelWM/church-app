@@ -33,6 +33,11 @@ async function validateChanges(tx: Tx, row: repo.TransactionRow, changes: Record
     const d = await repo.findDepartmentInParish(tx, changes.departmentId as string, row.parishId);
     if (!d) throw new HTTPException(422, { message: "Département invalide" });
   }
+  if (changes.investmentId) {
+    if (row.kind !== "depense") throw new HTTPException(422, { message: "Projet d'investissement réservé aux dépenses" });
+    const i = await repo.findInvestmentInParish(tx, changes.investmentId as string, row.parishId);
+    if (!i) throw new HTTPException(422, { message: "Projet d'investissement invalide" });
+  }
 }
 
 /** Runs inside the approve2 DB transaction: applies the approved change (and to every transfer leg). */

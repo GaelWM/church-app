@@ -15,7 +15,7 @@ export interface ExportSpec {
   rows: Record<string, string | number | null | undefined>[];
   totals?: Record<string, string | number>; // optional last row (keys = column keys)
 }
-export type ExportFormat = "xlsx" | "pdf" | "print";
+export type ExportFormat = "xlsx" | "pdf" | "print" | "csv";
 
 const fileBase = (title: string) => title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
 const cell = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : v);
@@ -25,9 +25,18 @@ export function exportTable(format: ExportFormat, spec: ExportSpec) {
   if (spec.totals) body.push(spec.columns.map((c) => cell(spec.totals![c.key])));
   const head = spec.columns.map((c) => c.header);
 
-  if (format === "xlsx") {
+  if (format === "xlsx" || format === "csv") {
     const aoa: (string | number)[][] = [[spec.title], ...(spec.subtitle ? [[spec.subtitle]] : []), [], head, ...body];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    if (format === "csv") {
+      // Semicolon-delimited (French-locale Excel) with a UTF-8 BOM so accents render correctly.
+      const csv = "﻿" + XLSX.utils.sheet_to_csv(ws, { FS: ";" });
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${fileBase(spec.title)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, spec.title.replace(/[\\/?*[\]:]/g, " ").slice(0, 30) || "Rapport");
     XLSX.writeFile(wb, `${fileBase(spec.title)}.xlsx`);

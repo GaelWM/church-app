@@ -119,7 +119,12 @@ export async function effectifs(tx: Tx, actor: Actor, q: Q) {
 
 export async function membres(tx: Tx, actor: Actor, q: Q) {
   const rows = await repo.memberRows(tx, q, actor.parishId);
-  return { rows: [...rows].map((r: any) => ({ id: r.id, fullName: r.full_name, phone: r.phone, whatsapp: r.whatsapp, email: r.email, address: r.address, homeChurch: r.home_church, invitedBy: r.invited_by, since: r.since })), totals: [], meta: { count: rows.length } };
+  return { rows: [...rows].map((r: any) => ({ id: r.id, fullName: r.full_name, phone: r.phone, whatsapp: r.whatsapp, email: r.email, address: r.address, since: r.since })), totals: [], meta: { count: rows.length } };
+}
+
+export async function nouveauxVenus(tx: Tx, actor: Actor, q: Q) {
+  const rows = await repo.newcomerRows(tx, q, actor.parishId);
+  return { rows: [...rows].map((r: any) => ({ id: r.id, fullName: r.full_name, phone: r.phone, whatsapp: r.whatsapp, email: r.email, address: r.address, homeChurch: r.home_church, invitedBy: r.invited_by, date: r.date })), totals: [], meta: { count: rows.length } };
 }
 
 export async function ouvriers(tx: Tx, actor: Actor, q: Q) {

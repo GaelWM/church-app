@@ -1,6 +1,6 @@
 import { and, desc, eq, getTableColumns, gte, inArray, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { accounts, categories, commitments, settings, transactionEvents, transactions, users, type Tx } from "@church/db";
+import { accounts, budgetInvestments, categories, commitments, settings, transactionEvents, transactions, users, type Tx } from "@church/db";
 import { inList } from "../../services/sql";
 import type { Filters } from "./transactions.dto";
 
@@ -23,6 +23,11 @@ export async function findPieceModeSetting(tx: Tx, parishId: string) {
 export async function findCommitment(tx: Tx, id: string, parishId: string) {
   const [m] = await tx.select().from(commitments).where(and(eq(commitments.id, id), eq(commitments.parishId, parishId)));
   return m;
+}
+
+export async function findInvestment(tx: Tx, id: string, parishId: string) {
+  const [i] = await tx.select().from(budgetInvestments).where(and(eq(budgetInvestments.id, id), eq(budgetInvestments.parishId, parishId)));
+  return i;
 }
 
 export async function findAccount(tx: Tx, id: string) {

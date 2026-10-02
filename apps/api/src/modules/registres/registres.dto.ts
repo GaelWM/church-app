@@ -14,7 +14,7 @@ const req = (label: string) => z.string({ message: `${label} requis` }).trim().m
 export const schemas = {
   dedications: z.object({ date: regDate, childName: req("Nom de l'enfant"), motherName: opt, fatherName: opt, pastorName: opt, formCompleted: z.boolean().optional() }),
   baptisms: z.object({ fullName: req("Nom"), date: regDate, place: opt, address: opt, phone: opt, email: z.string().trim().email("Email invalide").optional().nullable().or(z.literal("")).transform((v) => (v ? v : null)), whatsapp: opt, pastorName: opt }),
-  marriages: z.object({ husbandName: req("Nom de l'époux"), wifeName: req("Nom de l'épouse"), coupleAddress: opt, phone: opt, date: regDate, pastorName: opt, blessingPlace: opt }),
+  marriages: z.object({ husbandName: req("Nom de l'époux"), wifeName: req("Nom de l'épouse"), coupleAddress: opt, phone: opt, date: regDate, pastorName: opt, blessingPlace: opt, godfatherName: opt, godmotherName: opt }),
 } as const;
 
 /** Filters accepted by the register list endpoint (raw query-string values). */

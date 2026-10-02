@@ -93,7 +93,11 @@ export const REPORTS: ReportDef[] = [
   },
   {
     key: "membres", title: "Membres", description: "Liste des membres.", filters: ["q"], totalLabelCol: "fullName",
-    columns: [T("fullName", "Nom"), T("phone", "Téléphone"), T("whatsapp", "WhatsApp"), T("email", "E-mail"), T("address", "Adresse"), T("homeChurch", "Église d'origine"), T("invitedBy", "Invité par"), D("since", "Depuis")],
+    columns: [T("fullName", "Nom"), T("phone", "Téléphone"), T("whatsapp", "WhatsApp"), T("email", "E-mail"), T("address", "Adresse"), D("since", "Membre depuis")],
+  },
+  {
+    key: "nouveaux-venus", title: "Nouveaux venus", description: "Liste des nouveaux venus.", filters: ["q"], totalLabelCol: "fullName",
+    columns: [T("fullName", "Nom"), T("phone", "Téléphone"), T("whatsapp", "WhatsApp"), T("email", "E-mail"), T("address", "Adresse"), T("homeChurch", "Église d'attache"), T("invitedBy", "Invité par"), D("date", "Date")],
   },
   {
     key: "ouvriers", title: "Ouvriers", description: "Pasteurs, chefs de département et ouvriers, avec enseignement de base.", filters: ["workerCategory", "q"], totalLabelCol: "fullName",

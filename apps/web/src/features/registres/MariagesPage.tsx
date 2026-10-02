@@ -10,12 +10,15 @@ const cfg: RegistreConfig = {
     { key: "date", label: "Date", kind: "date", required: true },
     { key: "pastorName", label: "Pasteur", kind: "pastor" },
     { key: "blessingPlace", label: "Lieu de la bénédiction" },
+    { key: "godfatherName", label: "Nom du parrain" },
+    { key: "godmotherName", label: "Nom de la marraine" },
     { key: "phone", label: "Téléphone", kind: "tel" },
     { key: "coupleAddress", label: "Adresse du couple", full: true },
   ],
   columns: [
     { header: "Époux", key: "husbandName" }, { header: "Épouse", key: "wifeName" }, { header: "Adresse", key: "coupleAddress" }, { header: "Téléphone", key: "phone" },
     { header: "Pasteur", key: "pastorName" }, { header: "Lieu de bénédiction", key: "blessingPlace" },
+    { header: "Parrain", key: "godfatherName" }, { header: "Marraine", key: "godmotherName" },
   ],
 };
 export const MariagesPage = () => <RegistrePage cfg={cfg} />;

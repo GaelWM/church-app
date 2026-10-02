@@ -2,7 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Tx } from "@church/db";
 import { can, transition, WorkflowError, type TxAction, type TxStatus } from "@church/shared";
 import { audit } from "../../services/audit";
-import type { AttendanceActionInput, AttendanceDayInput, AttendanceInput, AttendanceQuery, Counts, MemberInput, WorkerInput } from "./effectifs.dto";
+import type { AttendanceActionInput, AttendanceDayInput, AttendanceInput, AttendanceQuery, Counts, MemberInput, NewcomerInput, WorkerInput } from "./effectifs.dto";
 import * as repo from "./effectifs.repo";
 
 /**
@@ -98,6 +98,35 @@ export async function deleteMember(tx: Tx, actor: Actor, id: string) {
     if (e instanceof HTTPException) throw e;
     throw new HTTPException(422, { message: "Ce membre est lié à des promesses ou des opérations : suppression impossible" });
   }
+}
+
+// Nouveaux venus
+export function listNewcomers(tx: Tx, actor: Actor) {
+  if (!can(actor.roles, "registry.write") && !can(actor.roles, "transaction.readAll")) throw new HTTPException(403, { message: "Permission refusée" });
+  return repo.listNewcomers(tx);
+}
+
+export async function createNewcomer(tx: Tx, actor: Actor, b: NewcomerInput) {
+  const n = await repo.insertNewcomer(tx, actor.parishId, b);
+  await audit(tx, { parishId: n.parishId, actorId: actor.userId, action: "newcomer.create", entity: "newcomer", entityId: n.id, after: n });
+  return n;
+}
+
+export async function updateNewcomer(tx: Tx, actor: Actor, id: string, b: NewcomerInput) {
+  const parishId = actor.parishId;
+  const old = await repo.findNewcomer(tx, id, parishId);
+  if (!old) throw new HTTPException(404, { message: "Nouveau venu introuvable" });
+  const n = await repo.updateNewcomer(tx, old.id, b);
+  await audit(tx, { parishId, actorId: actor.userId, action: "newcomer.update", entity: "newcomer", entityId: old.id, before: old, after: n });
+  return n;
+}
+
+export async function deleteNewcomer(tx: Tx, actor: Actor, id: string) {
+  const parishId = actor.parishId;
+  const old = await repo.deleteNewcomer(tx, id, parishId);
+  if (!old) throw new HTTPException(404, { message: "Nouveau venu introuvable" });
+  await audit(tx, { parishId, actorId: actor.userId, action: "newcomer.delete", entity: "newcomer", entityId: old.id, before: old });
+  return { ok: true };
 }
 
 // Ouvriers

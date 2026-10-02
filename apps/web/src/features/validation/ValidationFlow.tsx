@@ -21,6 +21,7 @@ const ROLE_STEPS: Record<Role, Step[]> = {
   pasteur: [5, 6],
   administrateur: [],
   auditeur: [],
+  evangelisation: [],
 };
 
 /** Which states each role acts on (their "to do" boxes). */
@@ -30,6 +31,7 @@ const ROLE_NODES: Record<Role, TxStatus[]> = {
   pasteur: ["validee1"],
   administrateur: [],
   auditeur: [],
+  evangelisation: [],
 };
 
 const STEP_LABEL: Record<Step, string> = {
@@ -86,6 +88,14 @@ const EXPLANATIONS: Record<Role, Explanation> = {
       <>Vous ne saisissez ni ne validez rien.</>,
     ],
     note: <>Vous pouvez exporter les rapports en Excel et PDF.</>,
+  },
+  evangelisation: {
+    title: "Évangélisation : effectifs et registres",
+    icon: <Eye className="size-4" />,
+    steps: [
+      <>Vous gérez les <b>Nouveaux venus</b>, <b>Membres</b>, <b>Ouvriers</b>, <b>Dédicaces</b>, <b>Baptêmes</b> et <b>Mariages</b>.</>,
+      <>Vous n'avez accès ni à la Saisie, ni aux Banques, au Journal, aux Engagements ou à la Comptabilité.</>,
+    ],
   },
 };
 

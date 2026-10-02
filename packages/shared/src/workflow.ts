@@ -92,5 +92,5 @@ export function changeRequestTransition(i: ChangeRequestTransitionInput): Change
 }
 
 /** Fields a modification request may change on a validated entry. Amounts/accounts are never editable: cancel and re-enter. */
-export const MODIFIABLE_TX_FIELDS = ["description", "beneficiary", "documentNumber", "subCategory", "categoryId", "departmentId"] as const;
+export const MODIFIABLE_TX_FIELDS = ["description", "beneficiary", "documentNumber", "subCategory", "categoryId", "departmentId", "investmentId"] as const;
 export type ModifiableTxField = (typeof MODIFIABLE_TX_FIELDS)[number];
