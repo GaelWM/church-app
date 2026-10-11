@@ -9,7 +9,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
  * date pickers in the web app (which enforce the tighter, per-field UX limits), so the UI can never produce a rejected date;
  * the extra day of future slack covers users whose local date is already "tomorrow" in UTC.
  */
-const boundedDate = (pastYears: number, futureDays: number) => isoDate.refine((s) => {
+export const boundedDate = (pastYears: number, futureDays: number) => isoDate.refine((s) => {
   const t = Date.parse(`${s}T00:00:00Z`);
   if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== s) return false; // e.g. 2026-02-31
   const now = Date.now();

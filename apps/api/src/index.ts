@@ -91,8 +91,12 @@ export function createApp(deps: Deps = {}) {
     .onError((err, c) => {
       if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
       const msg = String((err as any)?.message ?? err);
+      // Malformed input that only the database could judge (an id that is not a uuid, a number out of range, an impossible date).
+      const pg = (err as any)?.code;
+      if (pg === "22P02" || pg === "22007" || pg === "22008") return c.json({ error: "Valeur invalide" }, 400);
+      if (pg === "22003") return c.json({ error: "Valeur hors limites" }, 422);
       // Postgres guard triggers raise readable French messages: surface them as 422.
-      if (/Écriture validée|Période clôturée|en ajout seul/.test(msg)) return c.json({ error: msg.replace(/^.*?(Écriture|Période|transaction)/, "$1") }, 422);
+      if (/Écriture validée|Période clôturée|en ajout seul|Immobilisation validée|Une immobilisation est créée|Identité de l'immobilisation|Inventaire clôturé|Situation théorique|Une ligne de la situation théorique|Identité de l'inventaire/.test(msg)) return c.json({ error: msg.replace(/^.*?(Écriture|Période|transaction)/, "$1") }, 422);
       console.error(err);
       // Local development: say what is wrong instead of a generic message.
       if (devAuthEnabled(c.env) && /ECONNREFUSED|CONNECT_TIMEOUT|CONNECTION_CLOSED|Failed query|connect/i.test(msg))

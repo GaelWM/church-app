@@ -10,12 +10,12 @@ import { useApi } from "../../core/api";
 import { amountField, requiredSelect } from "../../core/forms";
 import { useCategories, useInvalidateLedger } from "../../core/queries";
 import type { ExpenseLine } from "./types";
+import { exactAmount } from "@/lib/amount";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: String(i + 1).padStart(2, "0") }));
 const QUARTERS = [1, 2, 3, 4].map((q) => ({ value: String(q), label: `T${q}` }));
 
 /** Exact minor units -> "1234,56" for the amount input (no float). */
-const exactAmount = (minor: string) => { const s = BigInt(minor).toString().padStart(3, "0"); return `${s.slice(0, -2)},${s.slice(-2)}`; };
 
 const schema = z.object({
   categoryId: requiredSelect("Catégorie requise"),

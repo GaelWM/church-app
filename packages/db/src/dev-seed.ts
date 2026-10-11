@@ -1,5 +1,6 @@
 /** Demo data for local development only (idempotent). Users log in via the dev picker. */
 import { eq } from "drizzle-orm";
+import { seedAssetDefaults } from "./asset-seed";
 import { createDb } from "./client";
 import { requireDatabaseUrl } from "./env";
 import { accounts, departments, exchangeRates, members, parishes, userParishRoles, users } from "./schema";
@@ -33,6 +34,7 @@ if (!(await db.select().from(accounts).where(eq(accounts.parishId, p!.id))).leng
   ].map((name) => ({ parishId: p!.id, name })));
   await db.insert(members).values([{ parishId: p!.id, fullName: "Marie Kabila" }, { parishId: p!.id, fullName: "Jean Mbuyi" }]);
 }
+await seedAssetDefaults(db, p!.id); // local dev role is a superuser, so RLS does not get in the way
 if (!(await db.select().from(exchangeRates)).length) await db.insert(exchangeRates).values({ rateCdfPerUsd: "2800", effectiveFrom: "2020-01-01" });
 console.log("Demo data ready (parish KIN01; users dev|administrateur, dev|caissier, dev|tresorier, dev|pasteur)");
 process.exit(0);

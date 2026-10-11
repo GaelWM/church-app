@@ -3,17 +3,20 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/common";
 import { TAB_ICONS, TAB_LABELS } from "../../app/routes";
-import { AssetListTab } from "./AssetListTab";
-import { DepreciationTab } from "./DepreciationTab";
-import { AssetReportTab } from "./AssetReportTab";
+import { AssetRegistreTab } from "./AssetRegistreTab";
+import { AssetInventoryTab } from "./AssetInventoryTab";
+import { AssetReportsTab } from "./AssetReportsTab";
+import { AssetRequestsPanel } from "./AssetRequestsPanel";
 
-const TAB_KEYS = ["liste", "amortissement", "rapport"] as const;
+const TAB_KEYS = ["registre", "demandes", "inventaire", "rapports"] as const;
 type AssetPageTab = (typeof TAB_KEYS)[number];
 
 export function ImmobilisationsPage() {
   const [params, setParams] = useSearchParams();
-  const requested = params.get("tab") as AssetPageTab | null;
-  const tab: AssetPageTab = requested && TAB_KEYS.includes(requested) ? requested : "liste";
+  // "liste" was the first tab's old name: keep old bookmarks working.
+  const raw = params.get("tab") === "liste" ? "registre" : params.get("tab");
+  const requested = raw as AssetPageTab | null;
+  const tab: AssetPageTab = requested && TAB_KEYS.includes(requested) ? requested : "registre";
   // Keep the URL (and so the breadcrumb) in step with the tab actually shown, including the default.
   useEffect(() => { if (params.get("tab") !== tab) setParams({ tab }, { replace: true }); }, [tab, params]);
   const goTo = (t: string) => {
@@ -32,9 +35,10 @@ export function ImmobilisationsPage() {
           })}
         </TabsList>
       </Tabs>
-      {tab === "liste" && <AssetListTab />}
-      {tab === "amortissement" && <DepreciationTab />}
-      {tab === "rapport" && <AssetReportTab />}
+      {tab === "registre" && <AssetRegistreTab />}
+      {tab === "demandes" && <AssetRequestsPanel />}
+      {tab === "inventaire" && <AssetInventoryTab />}
+      {tab === "rapports" && <AssetReportsTab />}
     </>
   );
 }

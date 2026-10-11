@@ -5,7 +5,9 @@ set -euo pipefail
 NAME=church-test-pg; PORT=${TEST_PG_PORT:-54329}
 docker rm -f $NAME >/dev/null 2>&1 || true
 docker run -d --name $NAME -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=church -p $PORT:5432 postgres:16-alpine >/dev/null
-until docker exec $NAME pg_isready -U postgres -d church >/dev/null 2>&1; do sleep 1; done
+# Over TCP (-h 127.0.0.1): during first boot the image runs a temporary server that only listens on the unix socket,
+# so a socket check passes too early and the migration then fails with "the database system is starting up".
+until docker exec $NAME pg_isready -h 127.0.0.1 -U postgres -d church >/dev/null 2>&1; do sleep 1; done
 export DATABASE_URL=postgres://postgres:pw@localhost:$PORT/church
 (cd packages/db && bun src/migrate.ts && bun src/seed.ts) >&2
 (cd packages/db && APP_DB_PASSWORD=app bun src/grant-app-role.ts) >&2

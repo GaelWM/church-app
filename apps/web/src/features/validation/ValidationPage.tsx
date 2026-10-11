@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChangeRequestsPanel } from "./ChangeRequestsPanel";
+import { AssetRequestsPanel } from "../immobilisations/AssetRequestsPanel";
 
 /** "À valider" inbox: Trésorier sees Soumise (step 1), Pasteur sees Validée 1 (step 2). Batch actions. */
 export function ValidationPage() {
@@ -23,9 +24,11 @@ export function ValidationPage() {
       <TabsList>
         <TabsTrigger value="inbox">À valider</TabsTrigger>
         <TabsTrigger value="demandes">Demandes de modification / annulation</TabsTrigger>
+        {s.can("transaction.readAll") && <TabsTrigger value="immobilisations">Immobilisations</TabsTrigger>}
       </TabsList>
       <TabsContent value="inbox"><ValidationInbox /></TabsContent>
       <TabsContent value="demandes"><ChangeRequestsPanel /></TabsContent>
+      {s.can("transaction.readAll") && <TabsContent value="immobilisations"><AssetRequestsPanel /></TabsContent>}
     </Tabs>
   );
 }

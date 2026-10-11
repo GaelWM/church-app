@@ -4,7 +4,7 @@ import { flexRender, getCoreRowModel, getPaginationRowModel, getSortedRowModel, 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { parseAmount, STATUS_LABELS, type Currency, type TxStatus } from "@church/shared";
+import { parseAmount, STATUS_LABELS, type TxStatus } from "@church/shared";
 import { exportTable, type ExportSpec } from "@/lib/export-table";
 import { useSession } from "../core/session";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,12 +32,20 @@ export const STATUS_ICON: Record<TxStatus, ComponentType<{ className?: string }>
   brouillon: FilePen, soumise: Clock, validee1: ShieldCheck, validee: CircleCheck, rejetee: CircleX, annulee: CircleX,
 };
 
-function Dot({ className }: { className: string }) {
+export function Dot({ className }: { className: string }) {
   return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", className)} />;
 }
 
 export function StatusBadge({ status }: { status: TxStatus }) {
   return <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"><Dot className={STATUS_DOT[status]} />{STATUS_LABELS[status]}</span>;
+}
+
+export type Tone = "success" | "warning" | "destructive" | "muted" | "info";
+const TONE_DOT: Record<Tone, string> = { success: "bg-success", warning: "bg-warning", destructive: "bg-destructive", muted: "bg-muted-foreground/60", info: "bg-primary" };
+
+/** Dot + label for any status that is not a transaction status (asset statut / état, request status…). */
+export function ToneBadge({ tone, children, title }: { tone: Tone; children: ReactNode; title?: string }) {
+  return <span title={title} className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"><Dot className={TONE_DOT[tone]} />{children}</span>;
 }
 
 export function Provisional() {
@@ -109,10 +117,12 @@ const compareValues = (x: SortValue, y: SortValue) => {
 };
 
 /** shadcn Data Table: Table primitives driven by TanStack Table (sortable headers, optional pagination), with a skeleton while loading and an empty state. */
-export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", emptyAction, pageSize }: {
+export function DataTable<T extends { id?: string }>({ rows, columns, select, loading, empty = "Aucun élément", emptyAction, pageSize, serverPage }: {
   rows: T[]; columns: Column<T>[]; empty?: string; emptyAction?: ReactNode; emptyIcon?: Icon; loading?: boolean;
   /** Paginate at this many rows (the pager only appears when there is more than one page). */
   pageSize?: number;
+  /** Pagination done by the server: `rows` is the current page only and `total` the number of matching rows. */
+  serverPage?: { page: number; pageSize: number; total: number; onChange: (page: number) => void };
   select?: { selected: Set<string>; onChange: (s: Set<string>) => void; /** Rows that cannot be selected get a disabled checkbox. */ selectable?: (r: T) => boolean };
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -144,7 +154,7 @@ export function DataTable<T extends { id?: string }>({ rows, columns, select, lo
         <TableHeader>
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id}>
-              {select && <TableHead className="w-8"><Checkbox checked={all} onCheckedChange={(v) => select.onChange(new Set(v ? pickable.map((r) => r.id!) : []))} disabled={!pickable.length} aria-label="Tout sélectionner" /></TableHead>}
+              {select && <TableHead className="w-8"><Checkbox checked={all} onCheckedChange={(v) => { const here = new Set(pickable.map((r) => r.id!)); select.onChange(new Set(v ? [...select.selected, ...here] : [...select.selected].filter((id) => !here.has(id)))); }} disabled={!pickable.length} aria-label="Tout sélectionner" /></TableHead>}
               {hg.headers.map((h) => {
                 const dir = h.column.getIsSorted();
                 const r = right(h.column.columnDef.meta);
@@ -180,7 +190,16 @@ export function DataTable<T extends { id?: string }>({ rows, columns, select, lo
           ))}
         </TableBody>
       </Table>
-      {pageSize && table.getPageCount() > 1 && (
+      {serverPage && serverPage.total > serverPage.pageSize && (
+        <div className="flex items-center justify-between gap-3 pt-3 text-sm text-muted-foreground">
+          <span>{serverPage.total} lignes · page {serverPage.page} sur {Math.ceil(serverPage.total / serverPage.pageSize)}</span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => serverPage.onChange(serverPage.page - 1)} disabled={serverPage.page <= 1}>Précédent</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => serverPage.onChange(serverPage.page + 1)} disabled={serverPage.page * serverPage.pageSize >= serverPage.total}>Suivant</Button>
+          </div>
+        </div>
+      )}
+      {!serverPage && pageSize && table.getPageCount() > 1 && (
         <div className="flex items-center justify-between gap-3 pt-3 text-sm text-muted-foreground">
           <span>{rows.length} lignes · page {table.getState().pagination.pageIndex + 1} sur {table.getPageCount()}</span>
           <div className="flex gap-2">
@@ -272,7 +291,7 @@ export function Section({ title, actions, children, className }: { title: string
 }
 
 /** Amount with its currency code set smaller and muted, so the figure leads. */
-export function Money({ value, currency, className }: { value: string | bigint | number; currency: Currency; className?: string }) {
+export function Money({ value, currency, className }: { value: string | bigint | number; currency: string; className?: string }) {
   const { amount, code } = moneyParts(value, currency);
   return <span className={cn("whitespace-nowrap tabular-nums", className)}>{amount}<span className="ml-1 text-[0.6em] font-medium tracking-wide text-muted-foreground">{code}</span></span>;
 }
@@ -347,15 +366,27 @@ export function ReasonButton({ label, onConfirm, danger, icon: Icon }: { label: 
 }
 
 /** Excel / CSV / PDF / print buttons, shown only to users allowed to export (§18). */
-export function ExportButtons({ spec }: { spec: () => ExportSpec }) {
+/** `spec` may be async (e.g. fetch every page of a server-paginated list before exporting). */
+export function ExportButtons({ spec }: { spec: () => ExportSpec | Promise<ExportSpec> }) {
   const s = useSession();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   if (!s.can("report.export")) return null;
+  const run = async (format: "xlsx" | "csv" | "pdf" | "print") => {
+    setError(null);
+    // The print tab is opened now, while the click still counts as a user gesture (the data may take a while to fetch);
+    // the document is put into it once ready.
+    const win = format === "print" ? window.open("about:blank", "_blank") : null;
+    setPending(true);
+    try { exportTable(format, await spec(), win); } catch (e) { win?.close(); setError((e as Error).message || "Export impossible"); } finally { setPending(false); }
+  };
   return (
-    <span className="flex items-center gap-1">
-      <Button size="sm" variant="outline" onClick={() => exportTable("xlsx", spec())}><FileSpreadsheet />Excel</Button>
-      <Button size="sm" variant="outline" onClick={() => exportTable("csv", spec())}><FileDown />CSV</Button>
-      <Button size="sm" variant="outline" onClick={() => exportTable("pdf", spec())}><FileText />PDF</Button>
-      <Button size="sm" variant="outline" onClick={() => exportTable("print", spec())}><Printer />Imprimer</Button>
+    <span className="flex flex-wrap items-center gap-1">
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => run("xlsx")}><FileSpreadsheet />Excel</Button>
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => run("csv")}><FileDown />CSV</Button>
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => run("pdf")}><FileText />PDF</Button>
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => run("print")}><Printer />Imprimer</Button>
+      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
     </span>
   );
 }

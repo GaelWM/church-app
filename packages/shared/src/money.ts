@@ -1,5 +1,3 @@
-import type { Currency } from "./enums";
-
 /** All amounts are integers in minor units (centimes / cents). No floats touch money. */
 
 /** Parse a user-entered decimal string ("1 250,50", "1250.5") to minor units. */
@@ -11,11 +9,11 @@ export function parseAmount(input: string): bigint {
 }
 
 /**
- * Convert to USD minor units using rate "1 USD = rate CDF". The rate is a
- * decimal string with up to 4 decimals (kept as text to stay exact).
+ * Convert to USD minor units using rate "1 USD = rate <currency>" (CDF for the ledger; assets may also
+ * use EUR). The rate is a decimal string with up to 4 decimals (kept as text to stay exact).
  * Rounds half away from zero.
  */
-export function toUsdMinor(amountMinor: bigint, currency: Currency, rateCdfPerUsd: string): bigint {
+export function toUsdMinor(amountMinor: bigint, currency: string, rateCdfPerUsd: string): bigint {
   if (currency === "USD") return amountMinor;
   const rate = rateToScaled(rateCdfPerUsd); // rate * 10^4
   return divRound(amountMinor * 10_000n, rate);
@@ -36,7 +34,7 @@ function divRound(n: bigint, d: bigint): bigint {
   return neg ? -q : q;
 }
 
-export function formatAmount(minor: bigint | number, currency: Currency, locale = "fr-FR"): string {
+export function formatAmount(minor: bigint | number, currency: string, locale = "fr-FR"): string {
   const value = Number(minor) / 100;
   return new Intl.NumberFormat(locale, {
     style: "currency",

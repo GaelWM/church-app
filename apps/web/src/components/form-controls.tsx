@@ -30,7 +30,9 @@ interface OptionSelectProps {
 
 export function OptionSelect({ value, onValueChange, options, placeholder, size, disabled, className, "aria-label": ariaLabel }: OptionSelectProps) {
   return (
-    <Select value={value === "" ? undefined : value} onValueChange={(v) => onValueChange(v === NONE ? "" : v)} disabled={disabled}>
+    // Always controlled: passing `undefined` would flip Radix to uncontrolled and leave the old choice on screen after a reset.
+    // "" shows the placeholder, or the "no choice" item when the list has one.
+    <Select value={value === "" ? (options.some((o) => o.value === "") ? NONE : "") : value} onValueChange={(v) => onValueChange(v === NONE ? "" : v)} disabled={disabled}>
       <SelectTrigger size={size} aria-label={ariaLabel} className={cn("w-full", className)}>
         <SelectValue placeholder={placeholder ?? "—"} />
       </SelectTrigger>
@@ -61,6 +63,10 @@ export const dateLimits = {
   due: () => ({ min: shift({ years: -1 }), max: shift({ years: 5 }) }),
   /** A rate or setting taking effect: backfill up to 5 years, schedule up to a month ahead. */
   effective: () => ({ min: shift({ years: -5 }), max: shift({ days: 30 }) }),
+  /** Acquisition of a fixed asset: a temple or a plot may be decades old. Mirrors the API's 80-year window. */
+  acquisition: () => ({ min: shift({ years: -80 }), max: shift({ days: 1 }) }),
+  /** Mise en service: the same history, and up to a year ahead for something bought but not yet installed. */
+  inService: () => ({ min: shift({ years: -80 }), max: shift({ years: 1 }) }),
 };
 export type DateLimits = { min?: Date; max?: Date };
 

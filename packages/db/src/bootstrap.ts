@@ -3,7 +3,8 @@
  * The Auth0 user must already exist (Auth0 dashboard → Users) since sign-up is disabled.
  *   DATABASE_URL=... bun src/bootstrap.ts --parish "Paroisse Centrale" --code KIN01 --email a@b.org --name "Nom" --auth0-id "auth0|abc"
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { seedAssetDefaults } from "./asset-seed";
 import { createDb } from "./client";
 import { requireDatabaseUrl } from "./env";
 import { parishes, userParishRoles, users } from "./schema";
@@ -22,5 +23,10 @@ if (!p) [p] = await db.insert(parishes).values({ name: arg("parish"), code: arg(
 let [u] = await db.select().from(users).where(eq(users.auth0Id, arg("auth0-id")));
 if (!u) [u] = await db.insert(users).values({ auth0Id: arg("auth0-id"), email: arg("email"), fullName: arg("name") }).returning();
 await db.insert(userParishRoles).values({ userId: u!.id, parishId: p!.id, role: "administrateur" }).onConflictDoNothing();
+// Immobilisations referentials (acronyms, locations); idempotent. The tables have forced RLS, so scope the transaction to the parish.
+await db.transaction(async (tx) => {
+  await tx.execute(sql`select set_config('app.parish_ids', ${p!.id}, true)`);
+  await seedAssetDefaults(tx, p!.id);
+});
 console.log(`Administrator ${u!.email} is set up on parish ${p!.code}`);
 process.exit(0);

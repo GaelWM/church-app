@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { ROLES } from "@church/shared";
+import {
+  assetLabelFormatSchema, DEFAULT_ASSET_DEGRESSIVE_COEFFICIENTS, DEFAULT_ASSET_LABEL_FORMAT, degressiveCoefficientsSchema, ROLES,
+} from "@church/shared";
 
 /** Known parish settings (§15.1, §21, §25). Unknown keys are rejected on write. */
 export const settingsSchema = z.object({
@@ -10,6 +12,9 @@ export const settingsSchema = z.object({
   retention_policy_note: z.string().max(4000),
   backup_note: z.string().max(4000),
   closure_rule: z.enum(["mensuelle", "annuelle", "les deux"]),
+  // Immobilisations: dégressif coefficients by duration, and the étiquette layout.
+  asset_degressive_coefficients: degressiveCoefficientsSchema,
+  asset_label_format: assetLabelFormatSchema,
 });
 export type ParishSettings = z.infer<typeof settingsSchema>;
 export const settingsPatchSchema = settingsSchema.partial().strict();
@@ -23,4 +28,6 @@ export const SETTINGS_DEFAULTS: ParishSettings = {
   retention_policy_note: "",
   backup_note: "",
   closure_rule: "mensuelle",
+  asset_degressive_coefficients: DEFAULT_ASSET_DEGRESSIVE_COEFFICIENTS,
+  asset_label_format: DEFAULT_ASSET_LABEL_FORMAT,
 };

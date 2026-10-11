@@ -20,6 +20,7 @@ import { useSession } from "../../core/session";
 import type { Tx } from "../../core/types";
 import { receiptPdf } from "./receipt";
 import { ValidationFlowButton, countByStatus } from "../validation/ValidationFlow";
+import { exactAmount } from "@/lib/amount";
 
 const schema = z.object({
   date: z.string().min(1, "Date requise"),
@@ -37,7 +38,6 @@ const schema = z.object({
   investmentId: z.string().optional(),
 });
 /** Exact minor units -> "1234,56" for the amount input (no float). */
-const exactAmount = (minor: string) => { const s = BigInt(minor).toString().padStart(3, "0"); return `${s.slice(0, -2)},${s.slice(-2)}`; };
 const at = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "");
 type FormValues = z.infer<typeof schema>;
 

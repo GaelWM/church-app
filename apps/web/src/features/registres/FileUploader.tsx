@@ -12,21 +12,28 @@ export const MAX_MB = 8;
 export const checkFile = (f: File) =>
   !ACCEPT.split(",").includes(f.type) ? "Type non autorisé (JPEG, PNG, WebP ou PDF)" : f.size > MAX_MB * 1024 * 1024 ? `Fichier trop volumineux (${MAX_MB} Mo max)` : null;
 
-/** Files attached to one register entry: upload (photo / scan), view, download, delete. */
-export function FileUploader({ type, recordId, label, canWrite }: { type: string; recordId: string; label: string; canWrite: boolean }) {
+/**
+ * Files attached to one record: upload (photo / scan), view, download, delete. Defaults to a register entry;
+ * `listPath` / `filePath` point it at another module's endpoints (e.g. the files of a fixed asset).
+ */
+export function FileUploader({ type, recordId, label, canWrite, listPath, filePath }: {
+  type: string; recordId: string; label: string; canWrite: boolean; listPath?: string; filePath?: string;
+}) {
+  const list = listPath ?? `/registres/${type}/${recordId}/files`;
+  const item = filePath ?? "/registres/files";
   const api = useApi();
   const qc = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const key = useScopedKey("registre-files", type, recordId);
-  const files = useQuery({ queryKey: key, queryFn: () => api.get<RecordFile[]>(`/registres/${type}/${recordId}/files`) });
+  const files = useQuery({ queryKey: key, queryFn: () => api.get<RecordFile[]>(list) });
   const refresh = () => { qc.invalidateQueries({ queryKey: key }); qc.invalidateQueries({ queryKey: [key[0], "registre", type] }); };
   const up = useMutation({
-    mutationFn: async (f: File) => { const e = checkFile(f); if (e) throw new Error(e); return api.upload(`/registres/${type}/${recordId}/files`, f); },
+    mutationFn: async (f: File) => { const e = checkFile(f); if (e) throw new Error(e); return api.upload(list, f); },
     onSuccess: refresh,
   });
-  const del = useMutation({ mutationFn: (id: string) => api.del(`/registres/files/${id}`), onSuccess: refresh });
+  const del = useMutation({ mutationFn: (id: string) => api.del(`${item}/${id}`), onSuccess: refresh });
   const open = async (f: RecordFile, download: boolean) => {
-    const url = await api.fileUrl(`/registres/files/${f.id}${download ? "?download=1" : ""}`);
+    const url = await api.fileUrl(`${item}/${f.id}${download ? "?download=1" : ""}`);
     if (!download) { window.open(url, "_blank"); return; }
     const a = document.createElement("a"); a.href = url; a.download = f.filename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);

@@ -17,3 +17,22 @@
 | 14 | Alertes de solde négatif | manuel + engagements-settings.test.ts | | |
 | 15 | Effectifs par date, culte, sexe, nature | effectifs.test.ts | | |
 Extra §27 : change-requests.test.ts (demande, double approbation, rejet, exécution).
+
+## Immobilisations (spec « MENU IMMOBILISATIONS »)
+| # | Critère | Test automatisé | Résultat (OK / KO) | Date / Visa |
+|---|---|---|---|---|
+| I1 | Code `ACRONYME AAAAMM NNNNN` unique, séquence par mois et acronyme, sans doublon en parallèle | immobilisations.test.ts (codes), asset-code.test.ts | | |
+| I2 | Compte puis sous-compte dépendants ; localisation obligatoire ; coût = PA + FAA non saisissable | asset-accounts.test.ts, asset-schemas.test.ts, immobilisations.test.ts | | |
+| I3 | Devises USD/CDF/EUR avec taux figé par bien | immobilisations.test.ts, asset-schemas.test.ts | | |
+| I4 | Amortissement linéaire, dégressif, non amortissable ; taux, cumul, VNC | depreciation.test.ts, immobilisations.test.ts | | |
+| I5 | Validation Trésorier puis Pasteur ; le demandeur n'approuve pas son propre niveau | workflow.test.ts, immobilisations.test.ts | | |
+| I6 | Un bien validé ne se modifie ni ne se supprime directement (API et base) | immobilisations.test.ts | | |
+| I7 | Demande de modification/annulation à double approbation, anciennes et nouvelles valeurs, bien conservé | immobilisations.test.ts | | |
+| I8 | État, justification, états sensibles soumis à approbation, historique permanent | immobilisations.test.ts, workflow.test.ts | | |
+| I9 | Piste d'audit avec approbations et dates | immobilisations.test.ts | | |
+| I10 | Étiquette/code : code complet, QR, code-barres, réimpression tracée, lot | asset-labels.test.ts, immobilisations.test.ts, manuel (impression) | | |
+| I11 | Registre : colonnes, recherche, filtres, pagination, export | immobilisations.test.ts, manuel (exports) | | |
+| I12 | Inventaire : théorique figé, écarts, clôture gelée | asset-inventory.test.ts, immobilisations.test.ts | | |
+| I13 | Rapports (7 états), PDF/Excel/impression, cohérence avec le registre | asset-reports.test.ts, immobilisations.test.ts, manuel (exports) | | |
+| I14 | Isolation entre paroisses (RLS) | immobilisations.test.ts | | |
+

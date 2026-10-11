@@ -18,8 +18,9 @@ import { requiredSelect } from "../../core/forms";
 import { fmtDate, today } from "../../core/format";
 import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
+import { AssetsConfig } from "./AssetsConfig";
 
-type Tab = "users" | "parishes" | "accounts" | "categories" | "rate" | "audit" | "settings";
+type Tab = "users" | "parishes" | "accounts" | "categories" | "rate" | "audit" | "settings" | "immobilisations";
 // "Paramètres" is defined here until routes.ts carries it.
 const TABS = Object.entries({ ...TAB_LABELS["/configuration"]!, settings: TAB_LABELS["/configuration"]?.settings ?? "Paramètres" }) as [Tab, string][];
 const tabIcon = (t: Tab) => TAB_ICONS["/configuration"]?.[t] ?? SlidersHorizontal;
@@ -41,7 +42,7 @@ export function ConfigurationPage() {
         <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => { const Icon = tabIcon(t); return <TabsTrigger key={t} value={t}><Icon />{l}</TabsTrigger>; })}</TabsList>
       </Tabs>
       {tab === "users" && <Users />}{tab === "parishes" && <Parishes />}{tab === "accounts" && <Accounts />}
-      {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}{tab === "settings" && <Parameters />}
+      {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}{tab === "settings" && <Parameters />}{tab === "immobilisations" && <AssetsConfig />}
     </>
   );
 }

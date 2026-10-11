@@ -11,9 +11,9 @@ import { useApi } from "../../core/api";
 import { amountField } from "../../core/forms";
 import { useInvalidateLedger } from "../../core/queries";
 import type { Investment } from "./types";
+import { exactAmount } from "@/lib/amount";
 
 /** Exact minor units -> "1234,56" for the amount input (no float). */
-const exactAmount = (minor: string) => { const s = BigInt(minor).toString().padStart(3, "0"); return `${s.slice(0, -2)},${s.slice(-2)}`; };
 
 const schema = z.object({
   name: z.string().trim().min(1, "Nom du projet requis"),

@@ -1,4 +1,4 @@
-import { getTableName, and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
+import { getTableName, and, desc, eq, gte, ilike, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { baptisms, childDedications, marriages, recordFiles, userParishRoles, users, type Tx } from "@church/db";
 import type { RecordListQuery } from "./registres.dto";
 
@@ -15,7 +15,8 @@ export const listPastors = (tx: Tx, parishId: string) =>
     .where(and(eq(userParishRoles.parishId, parishId), eq(userParishRoles.role, "pasteur"), eq(users.active, true)))
     .orderBy(users.fullName);
 
-export const findFile = async (tx: Tx, id: string) => (await tx.select().from(recordFiles).where(eq(recordFiles.id, id)))[0];
+// Asset files live in the same table but belong to the Immobilisations module (own permissions and audit): never served from here.
+export const findFile = async (tx: Tx, id: string) => (await tx.select().from(recordFiles).where(and(eq(recordFiles.id, id), ne(recordFiles.recordType, "asset"))))[0];
 
 export const deleteFile = (tx: Tx, id: string) => tx.delete(recordFiles).where(eq(recordFiles.id, id));
 

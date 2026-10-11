@@ -29,5 +29,31 @@ Le demandeur ne peut pas approuver sa propre demande. Une demande rejetée reste
 - **Engagements** : construction, partenariat, parcelle, autres ; engagé, libéré, non libéré, historique des libérations.
 - **Effectifs** : par date et par culte, sexe × nature ; membres ; ouvriers.
 - **Dédicace enfants / Baptême / Mariage** : registres avec téléversement et téléchargement du document.
+- **Immobilisations** : registre des biens durables (voir ci-dessous).
 - **Rapports** : 13 états exportables en Excel et PDF, imprimables.
 - **Configuration** : utilisateurs et rôles, paroisses, comptes, catégories, taux de change, paramètres, journal d'audit.
+
+## Immobilisations
+Le menu **Immobilisations** tient le registre complet des biens durables : code unique, compte et sous-compte, fournisseur, localisation, coût d'acquisition, amortissement, état, historique et inventaire. Il ne génère aucune écriture comptable.
+
+**Enregistrer un bien** (Administrateur, Trésorier ou Pasteur) : *Registre › + Immobilisation*.
+1. Choisir le **type de compte** (21, 22, 23, 24, 27, 28) puis le **sous-compte** : seuls les sous-comptes du compte choisi sont proposés, avec le mode d'amortissement habituel.
+2. Le **code** est généré à l'enregistrement : `ACRONYME AAAAMM NNNNN` (ex. `MI 202610 00001`). Le numéro repart à 00001 chaque mois, pour chaque acronyme. Il n'est jamais saisi à la main.
+3. Saisir description, n° de facture, fournisseur, dates d'acquisition et de mise en service, **localisation (obligatoire)** et devise (USD, CDF, EUR ; taux de change optionnel).
+4. Saisir le **PA** (prix d'achat) et les **FAA** (frais accessoires) : le **coût d'acquisition = PA + FAA** est calculé, jamais saisi.
+5. Choisir le mode d'amortissement (linéaire, dégressif, non amortissable) et la durée. Taux, valeur amortissable, amortissement de l'exercice, cumul et **VNC** s'affichent en direct. L'amortissement est calculé au prorata mensuel à partir de la date de mise en service.
+6. Le bien est d'abord un **brouillon**. *Soumettre pour validation* l'envoie au Trésorier puis au Pasteur ; il devient **Actif** avec l'état initial **Bon**. Celui qui enregistre ne valide pas son propre niveau : s'il est Trésorier (ou Pasteur), seul l'autre approuve.
+
+**Un bien validé ne se modifie plus directement.** Sur sa fiche : *Demander une modification* ou *Demander une annulation* (motif obligatoire). Le Trésorier approuve, puis le Pasteur ; l'opération n'est définitive qu'après les deux. Rien n'est supprimé : un bien annulé reste dans le registre avec tout son historique. Le code ne change que par une demande exceptionnelle justifiée.
+
+**État du bien** (distinct du statut administratif) : Bon, Mauvais, Déclassé, Perdu. *Changer l'état* demande toujours un motif ; Mauvais, Déclassé et Perdu exigent aussi une justification. **Déclassé** et **Perdu** (et le retour de ces états) suivent le même circuit Trésorier puis Pasteur ; l'état affiché ne change qu'à l'approbation. *Historique de l'état* conserve définitivement chaque changement (date, heure, ancien et nouvel état, motif, localisation, utilisateur, validation).
+
+**Imprimer** : *Imprimer le code* ou *l'étiquette* (CEPD MBUDI, code, description, localisation, QR code et code-barres) depuis la fiche, ou en lot depuis le registre (cocher les biens). Une nouvelle impression est enregistrée comme **réimpression**. Le QR code ouvre la fiche, selon les droits de l'utilisateur. Format d'étiquette réglable dans *Configuration › Immobilisations*.
+
+**Rechercher et filtrer** le registre : code, description, facture, fournisseur, compte, sous-compte, localisation, année, devise, mode d'amortissement, état. Le registre s'exporte en Excel, CSV, PDF et s'imprime.
+
+**Inventaire** : *Inventaire › Nouvel inventaire* fige la liste des biens validés (d'une localisation ou de toutes). Pour chaque bien : présent ou absent, localisation et état constatés, responsable/service, observations. Les écarts (absent, autre localisation, état différent, bien non enregistré) sont signalés. Un bien introuvable se déclare « Perdu » depuis sa fiche. Un inventaire clôturé ne change plus.
+
+**Rapports** : état général, acquisitions (mois, trimestre, année), amortissements (par bien, compte, sous-compte, année), VNC, par catégorie, par localisation, par état. Les devises ne sont jamais additionnées ; un équivalent USD apparaît pour les biens qui portent un taux de change. Seuls les biens validés sont comptés.
+
+**Configuration › Immobilisations** (Administrateur) : acronymes du code, localisations, fournisseurs, coefficients de l'amortissement dégressif, format des étiquettes.

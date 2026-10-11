@@ -1,13 +1,14 @@
-import { formatAmount, type Currency } from "@church/shared";
+import { formatAmount } from "@church/shared";
 
-export const money = (minor: string | bigint | number, currency: Currency) => formatAmount(BigInt(minor), currency);
+/** `currency` is any ISO code the app handles: the ledger uses CDF/USD, fixed assets may also be in EUR. */
+export const money = (minor: string | bigint | number, currency: string) => formatAmount(BigInt(minor), currency);
 export const usd = (minor: string | bigint | number) => money(minor, "USD");
 /** jj/mm/aaaa */
 export const fmtDate = (iso?: string | null) => (iso ? new Intl.DateTimeFormat("fr-FR").format(new Date(iso.slice(0, 10) + "T00:00:00")) : "");
 export const today = () => new Date().toISOString().slice(0, 10);
 
 /** Amount and currency code separately, so the code can be set smaller and muted next to the figure. */
-export function moneyParts(minor: string | bigint | number, currency: Currency) {
+export function moneyParts(minor: string | bigint | number, currency: string) {
   const amount = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(BigInt(minor)) / 100).replace(/\u202f/g, "\u00a0");
   return { amount, code: currency };
 }

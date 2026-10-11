@@ -22,6 +22,20 @@
       "when": 1790966668751,
       "tag": "0002_budget_and_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791667527913,
+      "tag": "0003_immobilisations_spec",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791669141460,
+      "tag": "0004_asset_inventory",
+      "breakpoints": true
     }
   ]
 }

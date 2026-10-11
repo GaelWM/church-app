@@ -14,6 +14,7 @@ import { JournalPage } from "../features/journal/JournalPage";
 import { EngagementsPage } from "../features/engagements/EngagementsPage";
 import { BudgetPage } from "../features/budget/BudgetPage";
 import { ImmobilisationsPage } from "../features/immobilisations/ImmobilisationsPage";
+import { AssetFichePage } from "../features/immobilisations/AssetFichePage";
 import { EffectifsPage } from "../features/effectifs/EffectifsPage";
 import { DedicacesPage } from "../features/registres/DedicacesPage";
 import { BaptemesPage } from "../features/registres/BaptemesPage";
@@ -94,6 +95,8 @@ function Gate() {
           <Route path="engagements" element={<Guard allow={canSeeFinances}><EngagementsPage /></Guard>} />
           <Route path="budget" element={<Guard allow={(s) => s.can("transaction.readAll")}><BudgetPage /></Guard>} />
           <Route path="immobilisations" element={<Guard allow={(s) => s.can("transaction.readAll")}><ImmobilisationsPage /></Guard>} />
+          {/* The QR code on an étiquette opens this page; a user without access lands on the dashboard. */}
+          <Route path="immobilisations/:id" element={<Guard allow={(s) => s.can("transaction.readAll")}><AssetFichePage /></Guard>} />
           <Route path="effectifs" element={<EffectifsPage />} />
           <Route path="dedicaces" element={<DedicacesPage />} />
           <Route path="baptemes" element={<BaptemesPage />} />

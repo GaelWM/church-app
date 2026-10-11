@@ -20,7 +20,8 @@ export type ExportFormat = "xlsx" | "pdf" | "print" | "csv";
 const fileBase = (title: string) => title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
 const cell = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : v);
 
-export function exportTable(format: ExportFormat, spec: ExportSpec) {
+/** `win` is an already-opened tab to print into (opened on the click, before slow data loads, so pop-up blockers allow it). */
+export function exportTable(format: ExportFormat, spec: ExportSpec, win?: Window | null) {
   const body = spec.rows.map((r) => spec.columns.map((c) => cell(r[c.key])));
   if (spec.totals) body.push(spec.columns.map((c) => cell(spec.totals![c.key])));
   const head = spec.columns.map((c) => c.header);
@@ -54,5 +55,6 @@ export function exportTable(format: ExportFormat, spec: ExportSpec) {
   });
   if (format === "pdf") { doc.save(`${fileBase(spec.title)}.pdf`); return; }
   doc.autoPrint();
-  window.open(doc.output("bloburl") as unknown as string, "_blank");
+  const url = doc.output("bloburl") as unknown as string;
+  if (win && !win.closed) win.location.href = url; else window.open(url, "_blank");
 }
