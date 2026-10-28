@@ -17,5 +17,9 @@ export const schemas = {
   marriages: z.object({ husbandName: req("Nom de l'époux"), wifeName: req("Nom de l'épouse"), coupleAddress: opt, phone: opt, date: regDate, pastorName: opt, blessingPlace: opt, godfatherName: opt, godmotherName: opt }),
 } as const;
 
-/** Filters accepted by the register list endpoint (raw query-string values). */
-export type RecordListQuery = { from?: string; to?: string; q?: string; pastor?: string };
+/** Filters accepted by the register list endpoint (raw query-string values; `status` is a comma list, workflow registers only). */
+export type RecordListQuery = { from?: string; to?: string; q?: string; pastor?: string; status?: string };
+
+/** Body of a circuit action; reject and reopen need the motif (checked by registryTransition). */
+export const recordActionSchema = z.object({ comment: z.string().trim().max(1000).optional() }).optional();
+export type RecordActionInput = z.infer<typeof recordActionSchema>;

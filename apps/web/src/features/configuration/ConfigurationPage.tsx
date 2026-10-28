@@ -4,9 +4,9 @@ import { useSearchParams } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Ban, Building2, ArrowLeftRight, Plus, RotateCcw, ScrollText, Settings, SlidersHorizontal, Tags, Users as UsersIcon, Wallet } from "lucide-react";
-import { ACCOUNT_TYPES, CURRENCIES, findRoleConflict, parseAmount, ROLE_LABELS, ROLES, type Role } from "@church/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ban, Building2, ArrowLeftRight, Network, Pencil, Plus, RotateCcw, ScrollText, Settings, SlidersHorizontal, Tags, Trash2, Users as UsersIcon, Wallet, X } from "lucide-react";
+import { ACCOUNT_TYPES, CURRENCIES, FINANCE_ROLES, findRoleConflict, parseAmount, ROLE_LABELS, ROLES, type Role } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { useAccounts, useCategories, useInvalidateLedger, useScopedKey } from ".
 import { useSession } from "../../core/session";
 import { AssetsConfig } from "./AssetsConfig";
 
-type Tab = "users" | "parishes" | "accounts" | "categories" | "rate" | "audit" | "settings" | "immobilisations";
+type Tab = "users" | "parishes" | "accounts" | "categories" | "departements" | "rate" | "audit" | "settings" | "immobilisations";
 // "Paramètres" is defined here until routes.ts carries it.
 const TABS = Object.entries({ ...TAB_LABELS["/configuration"]!, settings: TAB_LABELS["/configuration"]?.settings ?? "Paramètres" }) as [Tab, string][];
 const tabIcon = (t: Tab) => TAB_ICONS["/configuration"]?.[t] ?? SlidersHorizontal;
@@ -42,7 +42,7 @@ export function ConfigurationPage() {
         <TabsList variant="line">{TABS.filter(([t]) => allowed.includes(t)).map(([t, l]) => { const Icon = tabIcon(t); return <TabsTrigger key={t} value={t}><Icon />{l}</TabsTrigger>; })}</TabsList>
       </Tabs>
       {tab === "users" && <Users />}{tab === "parishes" && <Parishes />}{tab === "accounts" && <Accounts />}
-      {tab === "categories" && <Categories />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}{tab === "settings" && <Parameters />}{tab === "immobilisations" && <AssetsConfig />}
+      {tab === "categories" && <Categories />}{tab === "departements" && <Departments />}{tab === "rate" && <Rate />}{tab === "audit" && <Audit />}{tab === "settings" && <Parameters />}{tab === "immobilisations" && <AssetsConfig />}
     </>
   );
 }
@@ -54,52 +54,100 @@ const userSchema = z.object({
   parishId: requiredSelect("Paroisse requise"), role: roleEnum, consolidated: z.boolean(),
 });
 
+type UserRole = { parishId: string; role: Role; consolidatedAccess: boolean };
+type User = { id: string; fullName: string; email: string; active: boolean; roles: UserRole[] };
+
 function Users() {
   const api = useApi();
   const s = useSession();
   const invalidate = useInvalidateLedger();
-  const users = useQuery({ queryKey: ["users"], queryFn: () => api.get<any[]>("/users") });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.get<User[]>("/users") });
   const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState<User | null>(null);
   const adminParishes = s.me.parishes.filter((p) => p.roles.includes("administrateur"));
-  const [target, setTarget] = useState(adminParishes[0]?.id ?? "");
   const toggle = useMutation({ mutationFn: (v: { id: string; state: "activate" | "deactivate" }) => api.post(`/users/${v.id}/${v.state}`), onSuccess: () => invalidate() });
-  const addRole = useMutation({
-    mutationFn: (v: { user: any; parishId: string; role: Role }) => {
-      const roles = [...v.user.roles, { parishId: v.parishId, role: v.role, consolidatedAccess: false }];
-      const conflict = findRoleConflict(roles.filter((r: any) => r.parishId === v.parishId).map((r: any) => r.role));
-      if (conflict) throw new Error(`Profils incompatibles dans une même paroisse : ${conflict.map((r) => ROLE_LABELS[r]).join(" + ")}`);
-      return api.put(`/users/${v.user.id}/roles`, { roles });
-    },
-    onSuccess: () => invalidate(),
-  });
+  const del = useMutation({ mutationFn: (id: string) => api.del(`/users/${id}`), onSuccess: () => invalidate() });
   const pName = (id: string) => s.me.parishes.find((p) => p.id === id)?.name ?? id.slice(0, 6);
   return (
     <>
       <Card title="Utilisateurs" icon={UsersIcon} actions={<Button size="sm" onClick={() => setOpen(true)}><Plus /> Utilisateur</Button>}>
-        <ErrorNote error={toggle.error ?? addRole.error} />
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          Ajouter un profil dans :
-          <OptionSelect size="sm" className="w-auto min-w-40" value={target} onValueChange={setTarget} options={adminParishes.map((p) => ({ value: p.id, label: p.name }))} />
-        </div>
+        <p className="muted">Seul un compte sans historique (invité par erreur, jamais utilisé) peut être supprimé ; sinon, désactivez-le.</p>
+        <ErrorNote error={toggle.error ?? del.error} />
         <DataTable rows={users.data ?? []} loading={users.isLoading} emptyIcon={UsersIcon} empty="Aucun utilisateur" columns={[
           { header: "Nom", cell: (u) => u.fullName }, { header: "Email", cell: (u) => u.email },
-          { header: "Profils", cell: (u) => u.roles.map((r: any) => `${ROLE_LABELS[r.role as Role]} (${pName(r.parishId)})`).join(", ") },
+          { header: "Profils", cell: (u) => u.roles.map((r) => `${ROLE_LABELS[r.role]} (${pName(r.parishId)})`).join(", ") },
           { header: "Actif", cell: (u) => (u.active ? "Oui" : "Non") },
           { header: "", cell: (u) => (
             <span className="actions">
-              <OptionSelect size="sm" className="w-auto min-w-32" value="" placeholder="+ profil…" aria-label="Ajouter un profil" onValueChange={(v) => v && addRole.mutate({ user: u, parishId: target, role: v as Role })} options={ROLES.map((r) => {
-                const mine = u.roles.filter((x: any) => x.parishId === target).map((x: any) => x.role as Role);
-                const c = findRoleConflict([...mine, r]);
-                return { value: r, label: c ? `${ROLE_LABELS[r]} — incompatible` : ROLE_LABELS[r] };
-              })} />
+              <Button size="sm" variant="outline" onClick={() => setEdit(u)}><Pencil />Modifier</Button>
               {u.id !== s.me.user.id && <ActionButton size="sm" variant={u.active ? "destructive" : "outline"} icon={u.active ? Ban : RotateCcw} pending={toggle.isPending && toggle.variables?.id === u.id} onClick={() => toggle.mutate({ id: u.id, state: u.active ? "deactivate" : "activate" })}>{u.active ? "Désactiver" : "Réactiver"}</ActionButton>}
+              {u.id !== s.me.user.id && <Button size="icon-sm" variant="ghost" aria-label={`Supprimer ${u.fullName}`} disabled={del.isPending} onClick={() => confirm(`Supprimer définitivement ${u.fullName} ?`) && del.mutate(u.id)}><Trash2 /></Button>}
             </span>) },
         ]} />
       </Card>
       <ModalForm open={open} onOpenChange={setOpen} title="Nouvel utilisateur" description="Un email d'invitation avec un lien pour définir le mot de passe est envoyé automatiquement.">
         <UserForm parishes={adminParishes} onClose={() => setOpen(false)} onDone={() => invalidate()} />
       </ModalForm>
+      <ModalForm open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Modifier l'utilisateur" description="Un changement d'email est signalé aux administrateurs ; la nouvelle adresse reçoit un email de vérification.">
+        {edit && <UserEditForm user={edit} parishes={adminParishes} self={edit.id === s.me.user.id} onClose={() => setEdit(null)} onDone={() => invalidate()} />}
+      </ModalForm>
     </>
+  );
+}
+
+const identitySchema = userSchema.pick({ fullName: true, email: true });
+
+function UserEditForm({ user, parishes, self, onClose, onDone }: { user: User; parishes: { id: string; name: string }[]; self: boolean; onClose: () => void; onDone: () => void }) {
+  const api = useApi();
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof identitySchema>>({ resolver: zodResolver(identitySchema), defaultValues: { fullName: user.fullName, email: user.email } });
+  const [roles, setRoles] = useState<UserRole[]>(user.roles);
+  const [parishId, setParishId] = useState(parishes[0]?.id ?? "");
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const pName = (id: string) => parishes.find((p) => p.id === id)?.name ?? id.slice(0, 6);
+  const inParish = roles.filter((r) => r.parishId === parishId).map((r) => r.role);
+  const addRole = (role: Role) => {
+    const conflict = findRoleConflict([...inParish, role]);
+    if (conflict) { setRolesError(`Profils incompatibles dans une même paroisse : ${conflict.map((r) => ROLE_LABELS[r]).join(" + ")}`); return; }
+    setRolesError(null);
+    setRoles([...roles, { parishId, role, consolidatedAccess: false }]);
+  };
+  const save = useMutation({
+    mutationFn: async (v: z.infer<typeof identitySchema>) => {
+      const changes = { ...(v.fullName !== user.fullName && { fullName: v.fullName }), ...(v.email !== user.email && { email: v.email }) };
+      if (Object.keys(changes).length) await api.patch(`/users/${user.id}`, changes);
+      if (JSON.stringify(roles) !== JSON.stringify(user.roles)) await api.put(`/users/${user.id}/roles`, { roles });
+    },
+    onSuccess: () => { onDone(); onClose(); },
+    onError: () => onDone(), // the name and email may be saved even if the profiles were not
+  });
+  // An administrator cannot remove their own Administrateur profile (the server refuses too).
+  const locked = (r: UserRole) => self && r.role === "administrateur";
+  return (
+    <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate>
+      <FormGrid>
+        <Field label="Nom complet" error={errors.fullName?.message}><Input {...register("fullName")} /></Field>
+        <Field label="Email" error={errors.email?.message}><Input type="email" {...register("email")} /></Field>
+      </FormGrid>
+      <div className="mt-4 space-y-2 text-sm">
+        <div className="font-medium">Profils</div>
+        {roles.map((r, i) => (
+          <div key={`${r.parishId}-${r.role}`} className="flex items-center gap-3">
+            <span className="flex-1">{ROLE_LABELS[r.role]} <span className="text-muted-foreground">— {pName(r.parishId)}</span></span>
+            <label className="flex items-center gap-1.5 text-muted-foreground"><Checkbox checked={r.consolidatedAccess} onCheckedChange={(v) => setRoles(roles.map((x, j) => (j === i ? { ...x, consolidatedAccess: v === true } : x)))} /> Vue consolidée</label>
+            <Button type="button" size="icon-sm" variant="ghost" aria-label={`Retirer ${ROLE_LABELS[r.role]}`} disabled={roles.length === 1 || locked(r)} onClick={() => setRoles(roles.filter((_, j) => j !== i))}><X /></Button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pt-1">
+          <OptionSelect size="sm" className="w-auto min-w-40" value={parishId} onValueChange={setParishId} aria-label="Paroisse du profil" options={parishes.map((p) => ({ value: p.id, label: p.name }))} />
+          <OptionSelect size="sm" className="w-auto min-w-40" value="" placeholder="+ profil…" aria-label="Ajouter un profil" onValueChange={(v) => v && addRole(v as Role)} options={ROLES.filter((r) => !inParish.includes(r)).map((r) => (
+            { value: r, label: findRoleConflict([...inParish, r]) ? `${ROLE_LABELS[r]} — incompatible` : ROLE_LABELS[r] }
+          ))} />
+        </div>
+        <p className="muted">Un utilisateur garde au moins un profil. Pour lui retirer tout accès, désactivez-le.</p>
+      </div>
+      <div className="mt-3"><ErrorNote error={rolesError ? new Error(rolesError) : save.error} /></div>
+      <FormFooter pending={save.isPending} onCancel={onClose} />
+    </form>
   );
 }
 
@@ -243,6 +291,48 @@ function CategoryForm({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── Départements ─────────────────────────────────────────
+const departmentSchema = z.object({ name: z.string().trim().min(1, "Nom requis").max(100, "100 caractères maximum") });
+type Department = { id: string; name: string };
+
+function Departments() {
+  const api = useApi();
+  const depts = useQuery({ queryKey: useScopedKey("departments"), queryFn: () => api.get<Department[]>("/departments") });
+  const [edit, setEdit] = useState<Department | "new" | null>(null);
+  return (
+    <>
+      <Card title="Départements" icon={Network} actions={<Button size="sm" onClick={() => setEdit("new")}><Plus /> Département</Button>}>
+        <p className="muted">Proposés pour les ouvriers (Effectifs) et les offrandes d'activités de département. Un département ne se supprime pas : renommez-le si besoin.</p>
+        <DataTable rows={depts.data ?? []} loading={depts.isLoading} emptyIcon={Network} empty="Aucun département" columns={[
+          { header: "Nom", cell: (d) => d.name, sort: (d) => d.name },
+          { header: "", cell: (d) => <Button size="sm" variant="outline" onClick={() => setEdit(d)}><Pencil />Renommer</Button> },
+        ]} />
+      </Card>
+      <ModalForm open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title={edit === "new" ? "Nouveau département" : "Renommer le département"} className="sm:max-w-md">
+        {edit && <DepartmentForm department={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
+      </ModalForm>
+    </>
+  );
+}
+
+function DepartmentForm({ department, onClose }: { department: Department | null; onClose: () => void }) {
+  const api = useApi();
+  const qc = useQueryClient();
+  const key = useScopedKey("departments");
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof departmentSchema>>({ resolver: zodResolver(departmentSchema), defaultValues: { name: department?.name ?? "" } });
+  const save = useMutation({
+    mutationFn: (v: z.infer<typeof departmentSchema>) => department ? api.patch(`/departments/${department.id}`, v) : api.post("/departments", v),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: key }); onClose(); },
+  });
+  return (
+    <form onSubmit={handleSubmit((v) => save.mutate(v))} noValidate className="space-y-3">
+      <Field label="Nom" error={errors.name?.message}><Input autoFocus {...register("name")} /></Field>
+      <ErrorNote error={save.error} />
+      <FormFooter pending={save.isPending} onCancel={onClose} />
+    </form>
+  );
+}
+
 // ── Exchange rate ────────────────────────────────────────
 const rateSchema = z.object({ rate: z.string().regex(/^\d+([.,]\d{1,4})?$/, "Taux invalide (jusqu'à 4 décimales)"), from: z.string().min(1, "Date requise") });
 
@@ -341,7 +431,8 @@ function Parameters() {
           <label className="flex items-center gap-2"><Checkbox checked={f.negative_balance_alert.enabled} onCheckedChange={(v) => set("negative_balance_alert", { ...f.negative_balance_alert, enabled: v === true })} /> Activer l'alerte (email quotidien)</label>
           <Field label="Seuil (montant minimal du solde validé, dans la devise du compte)"><Input className="w-40" inputMode="decimal" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></Field>
           <div className="space-y-1"><div className="text-muted-foreground">Destinataires par profil</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">{ROLES.map((r) => <label key={r} className="flex items-center gap-1.5"><Checkbox checked={f.alert_recipients.roles.includes(r)} onCheckedChange={(v) => toggleRole(r, v === true)} />{ROLE_LABELS[r]}</label>)}</div>
+            {/* The alert shows account balances: only the profiles with financial access may receive it. */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1">{FINANCE_ROLES.map((r) => <label key={r} className="flex items-center gap-1.5"><Checkbox checked={f.alert_recipients.roles.includes(r)} onCheckedChange={(v) => toggleRole(r, v === true)} />{ROLE_LABELS[r]}</label>)}</div>
           </div>
           <Field label="Emails supplémentaires (séparés par des virgules)"><Input value={extra} onChange={(e) => setExtra(e.target.value)} /></Field>
         </fieldset>

@@ -1,4 +1,4 @@
-export const ROLES = ["administrateur", "caissier", "tresorier", "pasteur", "auditeur", "evangelisation"] as const;
+export const ROLES = ["administrateur", "caissier", "tresorier", "pasteur", "pasteur_assistant", "auditeur", "evangelisation"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const CURRENCIES = ["CDF", "USD"] as const;
@@ -23,7 +23,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   administrateur: "Administrateur",
   caissier: "Caissier",
   tresorier: "Trésorier",
-  pasteur: "Pasteur",
+  pasteur: "Pasteur titulaire",
+  pasteur_assistant: "Pasteur assistant",
   auditeur: "Auditeur",
   evangelisation: "Évangélisation",
 };
@@ -35,6 +36,12 @@ export const STATUS_LABELS: Record<TxStatus, string> = {
   validee: "Validée",
   rejetee: "Rejetée",
   annulee: "Annulée",
+};
+
+/** Effectifs des cultes, Baptêmes and Mariages: same states, but level 1 is signed by the Pasteur assistant. */
+export const REGISTRY_STATUS_LABELS: Record<TxStatus, string> = {
+  ...STATUS_LABELS,
+  validee1: "Validée 1 (Pasteur assistant)",
 };
 
 export const ENGAGEMENT_TYPES = ["construction", "partenariat", "parcelle", "autre"] as const;

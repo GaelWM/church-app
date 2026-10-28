@@ -2,11 +2,13 @@ import { Hono } from "hono";
 import { zValidator } from "../../middleware/validate";
 import { userCreateSchema } from "@church/shared";
 import type { AppEnv } from "../../env";
-import { userRolesSchema } from "./users.dto";
+import { userRolesSchema, userUpdateSchema } from "./users.dto";
 import * as ctrl from "./users.controller";
 
 export const userRoutes = new Hono<AppEnv>()
   .get("/users", ctrl.listUsers)
   .post("/users", zValidator("json", userCreateSchema), (c) => ctrl.createUser(c, c.req.valid("json")))
+  .patch("/users/:id", zValidator("json", userUpdateSchema), (c) => ctrl.updateUser(c, c.req.valid("json")))
+  .delete("/users/:id", ctrl.deleteUser)
   .put("/users/:id/roles", zValidator("json", userRolesSchema), (c) => ctrl.updateRoles(c, c.req.valid("json")))
   .post("/users/:id/:state{deactivate|activate}", ctrl.setActive);

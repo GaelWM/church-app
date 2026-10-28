@@ -1,9 +1,10 @@
 /** Demo data for local development only (idempotent). Users log in via the dev picker. */
 import { eq } from "drizzle-orm";
 import { seedAssetDefaults } from "./asset-seed";
+import { seedDepartmentDefaults } from "./department-seed";
 import { createDb } from "./client";
 import { requireDatabaseUrl } from "./env";
-import { accounts, departments, exchangeRates, members, parishes, userParishRoles, users } from "./schema";
+import { accounts, exchangeRates, members, parishes, userParishRoles, users } from "./schema";
 
 const db = createDb(requireDatabaseUrl());
 let [p] = await db.select().from(parishes).where(eq(parishes.code, "KIN01"));
@@ -11,7 +12,8 @@ if (!p) [p] = await db.insert(parishes).values({ name: "Paroisse Centrale (démo
 
 const demo = [
   ["administrateur", "Alice Administrateur"], ["caissier", "Claude Caissier"],
-  ["tresorier", "Thérèse Trésorière"], ["pasteur", "Paul Pasteur"], ["evangelisation", "Esther Évangélisation"],
+  ["tresorier", "Thérèse Trésorière"], ["pasteur", "Paul Pasteur"], ["pasteur_assistant", "Pierre Pasteur assistant"],
+  ["evangelisation", "Esther Évangélisation"],
 ] as const;
 for (const [role, fullName] of demo) {
   const auth0Id = `dev|${role}`;
@@ -28,13 +30,10 @@ if (!(await db.select().from(accounts).where(eq(accounts.parishId, p!.id))).leng
     { parishId: p!.id, type: "banque", currency: "USD", name: "Banque USD", bankName: "Rawbank", number: "0001-234" },
     { parishId: p!.id, type: "mobile_money", currency: "CDF", name: "M-Pesa", bankName: "Vodacom" },
   ]);
-  await db.insert(departments).values([
-    "Intercession", "Evangélisation", "Chorale", "Protocole", "Ecodim", "13-17", "Jeunesse", "Grand jeune",
-    "Partenariat", "Femme", "Nettoyage et décoration", "Social", "Secrétariat & adm",
-  ].map((name) => ({ parishId: p!.id, name })));
   await db.insert(members).values([{ parishId: p!.id, fullName: "Marie Kabila" }, { parishId: p!.id, fullName: "Jean Mbuyi" }]);
 }
 await seedAssetDefaults(db, p!.id); // local dev role is a superuser, so RLS does not get in the way
+await seedDepartmentDefaults(db, p!.id);
 if (!(await db.select().from(exchangeRates)).length) await db.insert(exchangeRates).values({ rateCdfPerUsd: "2800", effectiveFrom: "2020-01-01" });
-console.log("Demo data ready (parish KIN01; users dev|administrateur, dev|caissier, dev|tresorier, dev|pasteur)");
+console.log("Demo data ready (parish KIN01; users dev|administrateur, dev|caissier, dev|tresorier, dev|pasteur, dev|pasteur_assistant, dev|evangelisation)");
 process.exit(0);

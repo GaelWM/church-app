@@ -4,7 +4,7 @@ import type { AppEnv } from "../../env";
 import { passwordSetLink } from "../../services/auth0";
 import { safeSend } from "../../services/mailer";
 import { adminParishes, requireAdmin } from "./admin.guard";
-import type { UserCreateInput, UserRolesInput } from "./users.dto";
+import type { UserCreateInput, UserRolesInput, UserUpdateInput } from "./users.dto";
 import * as service from "./users.service";
 
 type C = Context<AppEnv>;
@@ -25,6 +25,20 @@ export const createUser = async (c: C, b: UserCreateInput) => {
   const link = await passwordSetLink(c.env, auth0Id);
   await safeSend(c.get("mailer"), [{ to: b.email, ...invitation({ fullName: b.fullName, link, appUrl: c.env.APP_URL }) }]);
   return c.json(user, 201);
+};
+
+export const updateUser = async (c: C, b: UserUpdateInput) => {
+  requireAdmin(c);
+  const { before, after } = await service.updateUser(c.get("db"), c.env, c.get("user").id, adminParishes(c), c.req.param("id")!, b);
+  if (after.email !== before.email) await alertAdmins(c, `L'email de ${after.fullName} a été modifié par ${c.get("user").fullName}.`);
+  return c.json(after);
+};
+
+export const deleteUser = async (c: C) => {
+  requireAdmin(c);
+  const u = await service.deleteUser(c.get("db"), c.env, c.get("user").id, adminParishes(c), c.req.param("id")!);
+  await alertAdmins(c, `${u.fullName} a été supprimé par ${c.get("user").fullName}.`);
+  return c.body(null, 204);
 };
 
 export const updateRoles = async (c: C, { roles }: UserRolesInput) => {

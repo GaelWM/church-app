@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import {
-  assetRequestTransition, changeRequestTransition, initialApprovalState, isSensitiveEtatChange, nextApprovalAction,
-  transition, validateEtatChange, WorkflowError,
+  assetRequestTransition, ATTENDANCE_CIRCUIT, changeRequestTransition, initialApprovalState, isSensitiveEtatChange, nextApprovalAction,
+  registrySubmitState, registryTransition, transition, validateEtatChange, WorkflowError,
 } from "./workflow";
-import { findRoleConflict, can } from "./permissions";
+import { FINANCE_ROLES, findRoleConflict, can } from "./permissions";
 
 const base = { enteredBy: "c1" };
 
@@ -124,4 +124,73 @@ test("the two levels are two different people, even when one user holds both rol
   // another Pasteur can; and without a recorded Trésorier (level skipped) there is nobody to conflict with
   expect(assetRequestTransition({ ...base, actorId: "p1", actorRoles: ["pasteur"], tresorierId: "both" })).toBe("approuvee_n2");
   expect(assetRequestTransition({ ...base, actorId: "both", actorRoles: ["tresorier", "pasteur"], tresorierId: null })).toBe("approuvee_n2");
+});
+
+// ---- Effectifs des cultes, baptêmes, mariages: Pasteur assistant → Pasteur titulaire --------------------
+
+test("attendance circuit: the Caissier counts, the Pasteur assistant then the Pasteur titulaire validate", () => {
+  const a = { enteredBy: "c1" };
+  expect(transition({ ...a, status: "brouillon", action: "submit", actorId: "c1", actorRoles: ["caissier"] }, ATTENDANCE_CIRCUIT)).toBe("soumise");
+  expect(() => transition({ ...a, status: "soumise", action: "validate1", actorId: "t1", actorRoles: ["tresorier"] }, ATTENDANCE_CIRCUIT)).toThrow(WorkflowError);
+  expect(transition({ ...a, status: "soumise", action: "validate1", actorId: "a1", actorRoles: ["pasteur_assistant"] }, ATTENDANCE_CIRCUIT)).toBe("validee1");
+  expect(() => transition({ ...a, status: "validee1", action: "validate2", actorId: "a1", actorRoles: ["pasteur_assistant"] }, ATTENDANCE_CIRCUIT)).toThrow(WorkflowError);
+  expect(transition({ ...a, status: "validee1", action: "validate2", actorId: "p1", actorRoles: ["pasteur"] }, ATTENDANCE_CIRCUIT)).toBe("validee");
+  expect(() => transition({ ...a, status: "soumise", action: "reject", actorId: "t1", actorRoles: ["tresorier"], comment: "non" }, ATTENDANCE_CIRCUIT)).toThrow(WorkflowError);
+  expect(() => transition({ ...a, status: "soumise", action: "reject", actorId: "a1", actorRoles: ["pasteur_assistant"] }, ATTENDANCE_CIRCUIT)).toThrow(WorkflowError);
+  // the finance circuit is unchanged: the assistant has no say there
+  expect(() => transition({ ...a, status: "soumise", action: "validate1", actorId: "a1", actorRoles: ["pasteur_assistant"] })).toThrow(WorkflowError);
+});
+
+test("the two levels are signed by two different people when level 1 is recorded", () => {
+  const both = ["pasteur_assistant", "pasteur"] as const;
+  expect(() => transition({ enteredBy: "c1", status: "validee1", action: "validate2", actorId: "x", actorRoles: both, validator1Id: "x" }, ATTENDANCE_CIRCUIT)).toThrow(WorkflowError);
+  expect(transition({ enteredBy: "c1", status: "validee1", action: "validate2", actorId: "x", actorRoles: both, validator1Id: "y" }, ATTENDANCE_CIRCUIT)).toBe("validee");
+});
+
+test("registers: an Évangélisation author goes through both levels", () => {
+  const r = { enteredBy: "e1", n1Skipped: false, n2Skipped: false };
+  expect(registryTransition({ ...r, status: "brouillon", action: "submit", actorId: "e1", actorRoles: ["evangelisation"] })).toEqual({ status: "soumise", n1Skipped: false, n2Skipped: false });
+  expect(() => registryTransition({ ...r, status: "brouillon", action: "submit", actorId: "c1", actorRoles: ["caissier"] })).toThrow(WorkflowError);
+  expect(registryTransition({ ...r, status: "soumise", action: "validate1", actorId: "a1", actorRoles: ["pasteur_assistant"] }).status).toBe("validee1");
+  expect(() => registryTransition({ ...r, status: "validee1", action: "validate2", actorId: "a1", actorRoles: ["pasteur_assistant"] })).toThrow(WorkflowError);
+  expect(registryTransition({ ...r, status: "validee1", action: "validate2", actorId: "p1", actorRoles: ["pasteur"], validator1Id: "a1" }).status).toBe("validee");
+  expect(() => registryTransition({ ...r, status: "validee", action: "submit", actorId: "e1", actorRoles: ["evangelisation"] })).toThrow(WorkflowError);
+});
+
+test("registers: creator-skip — the author's own level is skipped and recorded, never both", () => {
+  expect(registrySubmitState(["pasteur_assistant"])).toEqual({ status: "validee1", n1Skipped: true, n2Skipped: false });
+  expect(registrySubmitState(["pasteur"])).toEqual({ status: "soumise", n1Skipped: false, n2Skipped: true });
+  expect(registrySubmitState(["caissier"])).toEqual({ status: "soumise", n1Skipped: false, n2Skipped: false });
+  expect(() => registrySubmitState(["pasteur_assistant", "pasteur"])).toThrow(WorkflowError);
+  // a titulaire's entry: the assistant's signature is final
+  const p = { enteredBy: "p1", n1Skipped: false, n2Skipped: true };
+  expect(registryTransition({ ...p, status: "soumise", action: "validate1", actorId: "a1", actorRoles: ["pasteur_assistant"] }).status).toBe("validee");
+  // resubmission after a rejection recomputes the flags from the author's roles
+  expect(registryTransition({ enteredBy: "a1", n1Skipped: false, n2Skipped: false, status: "rejetee", action: "submit", actorId: "a1", actorRoles: ["pasteur_assistant"] }))
+    .toEqual({ status: "validee1", n1Skipped: true, n2Skipped: false });
+});
+
+test("registers: rejection needs a motif; only the titulaire sends a validated entry back for correction", () => {
+  const r = { enteredBy: "e1", n1Skipped: false, n2Skipped: false };
+  expect(() => registryTransition({ ...r, status: "soumise", action: "reject", actorId: "a1", actorRoles: ["pasteur_assistant"] })).toThrow(WorkflowError);
+  expect(registryTransition({ ...r, status: "soumise", action: "reject", actorId: "a1", actorRoles: ["pasteur_assistant"], comment: "date" }).status).toBe("rejetee");
+  expect(() => registryTransition({ ...r, status: "validee", action: "reopen", actorId: "a1", actorRoles: ["pasteur_assistant"], comment: "x" })).toThrow(WorkflowError);
+  expect(() => registryTransition({ ...r, status: "validee", action: "reopen", actorId: "p1", actorRoles: ["pasteur"] })).toThrow(WorkflowError);
+  expect(() => registryTransition({ ...r, status: "soumise", action: "reopen", actorId: "p1", actorRoles: ["pasteur"], comment: "x" })).toThrow(WorkflowError);
+  expect(registryTransition({ ...r, status: "validee", action: "reopen", actorId: "p1", actorRoles: ["pasteur"], comment: "nom" }).status).toBe("rejetee");
+});
+
+test("Pasteur assistant: registers and level-1 validation only, no financial permission; conflicting roles", () => {
+  expect(can(["pasteur_assistant"], "registry.write")).toBe(true);
+  expect(can(["pasteur_assistant"], "registry.validate1")).toBe(true);
+  for (const p of ["registry.validate2", "transaction.create", "transaction.validate1", "transaction.validate2", "transaction.readAll",
+    "transaction.readOwn", "report.export", "audit.view", "config.manage", "budget.manage", "asset.manage"] as const)
+    expect(can(["pasteur_assistant"], p)).toBe(false);
+  expect(can(["pasteur"], "registry.validate2")).toBe(true);
+  expect(can(["tresorier"], "registry.validate1")).toBe(false);
+  for (const r of ["pasteur", "caissier", "administrateur", "auditeur"] as const) expect(findRoleConflict(["pasteur_assistant", r])).not.toBeNull();
+  expect(findRoleConflict(["pasteur_assistant", "evangelisation"])).toBeNull();
+  expect(FINANCE_ROLES).not.toContain("pasteur_assistant");
+  expect(FINANCE_ROLES).not.toContain("evangelisation");
+  expect(FINANCE_ROLES).toContain("pasteur");
 });

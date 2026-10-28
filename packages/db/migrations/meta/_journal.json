@@ -36,6 +36,13 @@
       "when": 1791669141460,
       "tag": "0004_asset_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793193774464,
+      "tag": "0005_registry_workflow",
+      "breakpoints": true
     }
   ]
 }

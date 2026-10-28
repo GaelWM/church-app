@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileSpreadsheet, FileText, Printer } from "lucide-react";
-import { STATUS_LABELS, type TxStatus } from "@church/shared";
+import { REGISTRY_STATUS_LABELS, STATUS_LABELS, type TxStatus } from "@church/shared";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DateRangePicker, OptionSelect } from "@/components/form-controls";
@@ -29,6 +29,7 @@ export function ReportsPage() {
   const accounts = useAccounts();
   const [key, setKey] = useState(REPORTS[0]!.key);
   const def = REPORTS.find((r) => r.key === key)!;
+  const statusLabels = def.registryStatus ? REGISTRY_STATUS_LABELS : STATUS_LABELS;
   const categories = useCategories(def.categoryKind);
   const [f, setF] = useState<Filters>({});
   const setFilter = (patch: Filters) => setF((p) => ({ ...p, ...patch }));
@@ -53,7 +54,7 @@ export function ReportsPage() {
     const parts = [s.parish?.name ?? "Consolidé",
       f.from || f.to ? `Période ${f.from ? fmtDate(f.from) : "…"} – ${f.to ? fmtDate(f.to) : "…"}` : "",
       f.currency && `Devise ${f.currency}`, f.accountId && `Compte ${name(accounts.data, f.accountId) ?? ""}`, f.categoryId && `Catégorie ${name(categories.data, f.categoryId) ?? ""}`,
-      f.status && `Statut ${f.status.split(",").map((x) => STATUS_LABELS[x as TxStatus] ?? x).join(", ")}`,
+      f.status && `Statut ${f.status.split(",").map((x) => statusLabels[x as TxStatus] ?? x).join(", ")}`,
       f.enteredBy && `Initiateur ${name(users.data, f.enteredBy) ?? ""}`, f.validator && `Validateur ${name(users.data, f.validator) ?? ""}`,
       f.serviceType && `Culte ${f.serviceType}`, f.q && `Recherche « ${f.q} »`].filter(Boolean);
     return parts.join(" · ");
@@ -94,7 +95,7 @@ export function ReportsPage() {
         {def.filters.includes("currency") && <Field label="Devise"><OptionSelect className="min-w-28" value={f.currency ?? ""} onValueChange={(v) => setFilter({ currency: v })} placeholder="Toutes" options={[{ value: "", label: "Toutes" }, { value: "CDF", label: "CDF" }, { value: "USD", label: "USD" }]} /></Field>}
         {def.filters.includes("status") && (
           <Field label="Statut"><OptionSelect className="min-w-36" value={f.status ?? ""} onValueChange={(v) => setFilter({ status: v })} placeholder="Tous"
-            options={[...(def.defaults?.status ? [] : [ALL]), ...(["brouillon", "soumise", "validee1", "validee", "rejetee", "annulee"] as TxStatus[]).map((x) => ({ value: x, label: STATUS_LABELS[x] }))]} /></Field>
+            options={[...(def.defaults?.status ? [] : [ALL]), ...(["brouillon", "soumise", "validee1", "validee", "rejetee", ...(def.registryStatus ? [] : ["annulee"])] as TxStatus[]).map((x) => ({ value: x, label: statusLabels[x] }))]} /></Field>
         )}
         {def.filters.includes("enteredBy") && <Field label="Initiateur"><OptionSelect className="min-w-36" value={f.enteredBy ?? ""} onValueChange={(v) => setFilter({ enteredBy: v })} placeholder="Tous" options={opts((users.data ?? []).map((u) => ({ value: u.id, label: u.fullName })))} /></Field>}
         {def.filters.includes("validator") && <Field label="Validateur"><OptionSelect className="min-w-36" value={f.validator ?? ""} onValueChange={(v) => setFilter({ validator: v })} placeholder="Tous" options={opts((users.data ?? []).map((u) => ({ value: u.id, label: u.fullName })))} /></Field>}

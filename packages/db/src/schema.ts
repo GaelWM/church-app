@@ -133,6 +133,10 @@ export const attendanceRecords = pgTable("attendance_records", {
   mAdulte: integer("m_adulte").notNull().default(0), mEnfant: integer("m_enfant").notNull().default(0), mBebe: integer("m_bebe").notNull().default(0),
   fAdulte: integer("f_adulte").notNull().default(0), fEnfant: integer("f_enfant").notNull().default(0), fBebe: integer("f_bebe").notNull().default(0),
   status: text("status").notNull().default("brouillon"), enteredBy: uuid("entered_by").notNull().references(() => users.id),
+  // Signatures of the Pasteur assistant (level 1) and Pasteur titulaire (level 2); the motif is shown to the author.
+  validator1Id: uuid("validator1_id").references(() => users.id), validator1At: timestamp("validator1_at", { withTimezone: true }),
+  validator2Id: uuid("validator2_id").references(() => users.id), validator2At: timestamp("validator2_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
 });
 
 export const periods = pgTable("periods", {
@@ -200,6 +204,21 @@ export const workers = pgTable("workers", {
 });
 
 // §12-14 registers
+
+/**
+ * Pasteur assistant → Pasteur titulaire circuit of baptêmes and mariages (registryTransition in @church/shared).
+ * Rows that existed before the circuit were migrated as 'validee'; 9999f freezes submitted and validated rows.
+ */
+const registryWorkflow = () => ({
+  status: text("status").notNull().default("brouillon"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  n1Skipped: boolean("n1_skipped").notNull().default(false), n2Skipped: boolean("n2_skipped").notNull().default(false),
+  validator1Id: uuid("validator1_id").references(() => users.id), validator1At: timestamp("validator1_at", { withTimezone: true }),
+  validator2Id: uuid("validator2_id").references(() => users.id), validator2At: timestamp("validator2_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+});
+const REGISTRY_STATUSES = sql.raw("('brouillon','soumise','validee1','validee','rejetee')");
+
 export const childDedications = pgTable("child_dedications", {
   id: id(), parishId: uuid("parish_id").notNull().references(() => parishes.id),
   date: date("date").notNull(), childName: text("child_name").notNull(),
@@ -213,7 +232,11 @@ export const baptisms = pgTable("baptisms", {
   fullName: text("full_name").notNull(), date: date("date").notNull(), place: text("place"), address: text("address"),
   phone: text("phone"), email: text("email"), whatsapp: text("whatsapp"), pastorName: text("pastor_name"),
   createdBy: uuid("created_by").notNull().references(() => users.id), createdAt: createdAt(),
-});
+  ...registryWorkflow(),
+}, (t) => [
+  check("bap_status", sql`${t.status} in ${REGISTRY_STATUSES}`),
+  index("bap_parish_status").on(t.parishId, t.status),
+]);
 
 export const marriages = pgTable("marriages", {
   id: id(), parishId: uuid("parish_id").notNull().references(() => parishes.id),
@@ -222,7 +245,11 @@ export const marriages = pgTable("marriages", {
   pastorName: text("pastor_name"), blessingPlace: text("blessing_place"),
   godfatherName: text("godfather_name"), godmotherName: text("godmother_name"),
   createdBy: uuid("created_by").notNull().references(() => users.id), createdAt: createdAt(),
-});
+  ...registryWorkflow(),
+}, (t) => [
+  check("mar_status", sql`${t.status} in ${REGISTRY_STATUSES}`),
+  index("mar_parish_status").on(t.parishId, t.status),
+]);
 
 // Uploaded photo / card / certificate attached to a register entry (stored in R2).
 export const recordFiles = pgTable("record_files", {

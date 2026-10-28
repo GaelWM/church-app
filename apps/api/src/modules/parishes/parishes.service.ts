@@ -1,4 +1,4 @@
-import { seedAssetDefaults, withScope, type Db } from "@church/db";
+import { seedAssetDefaults, seedDepartmentDefaults, withScope, type Db } from "@church/db";
 import type { z } from "zod";
 import type { parishSchema } from "@church/shared";
 import { audit } from "../../services/audit";
@@ -10,8 +10,11 @@ export async function createParish(db: Db, actorId: string, b: z.infer<typeof pa
   // Creator administers what they create.
   await repo.insertAdminRole(db, actorId, p!.id);
   await db.transaction((tx) => audit(tx, { parishId: p!.id, actorId, action: "parish.create", entity: "parish", entityId: p!.id, after: p }));
-  // Immobilisations referentials (code acronyms, locations); the tables are RLS-scoped to the new parish.
-  await withScope(db, { userId: actorId, parishIds: [p!.id] }, (tx) => seedAssetDefaults(tx, p!.id));
+  // Immobilisations referentials (code acronyms, locations) and départements; the tables are RLS-scoped to the new parish.
+  await withScope(db, { userId: actorId, parishIds: [p!.id] }, async (tx) => {
+    await seedAssetDefaults(tx, p!.id);
+    await seedDepartmentDefaults(tx, p!.id);
+  });
   return p;
 }
 

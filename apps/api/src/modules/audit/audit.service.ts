@@ -9,5 +9,7 @@ export async function listAuditLog(db: Db, viewer: Viewer) {
   const targetIds = [...new Set(rows.filter((r) => r.log.entity === "user" && r.log.entityId).map((r) => r.log.entityId!))];
   const targets = targetIds.length ? await repo.listUserNames(db, targetIds) : [];
   const nameOf = new Map(targets.map((t) => [t.id, t.fullName]));
-  return rows.map((r) => ({ ...r.log, actorName: r.actorName, actorEmail: r.actorEmail, targetName: r.log.entity === "user" ? nameOf.get(r.log.entityId ?? "") ?? null : null }));
+  // A deleted user is only named in the entries that recorded them (creation, deletion).
+  const recorded = (r: (typeof rows)[number]) => (r.log.before as any)?.fullName ?? (r.log.after as any)?.fullName ?? null;
+  return rows.map((r) => ({ ...r.log, actorName: r.actorName, actorEmail: r.actorEmail, targetName: r.log.entity === "user" ? nameOf.get(r.log.entityId ?? "") ?? recorded(r) : null }));
 }

@@ -12,3 +12,4 @@ export * from "./asset-defaults";
 export * from "./asset-labels";
 export * from "./asset-inventory";
 export * from "./asset-reports";
+export * from "./departments";

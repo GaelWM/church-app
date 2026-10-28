@@ -2,7 +2,7 @@ import { Heart } from "lucide-react";
 import { RegistrePage, type RegistreConfig } from "./RegistrePage";
 
 const cfg: RegistreConfig = {
-  type: "marriages", title: "Mariage", newLabel: "Nouveau mariage", newTitle: "Nouveau mariage", editTitle: "Mariage", icon: Heart,
+  workflow: true, type: "marriages", title: "Mariage", newLabel: "Nouveau mariage", newTitle: "Nouveau mariage", editTitle: "Mariage", icon: Heart,
   fileLabel: "Certificat de mariage", searchHint: "Époux, épouse, téléphone…", nameOf: (r) => `${r.husbandName} & ${r.wifeName}`,
   fields: [
     { key: "husbandName", label: "Nom de l'époux", required: true },

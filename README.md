@@ -60,7 +60,7 @@ The 18:00 digest cron is `0 17 * * *` (UTC+1, Kinshasa); change it if you need L
 ### 4. Auth0
 - Application (SPA): callback, logout and web-origin URLs = your app URL; refresh-token rotation on.
 - API: identifier = `AUTH0_AUDIENCE`. Machine-to-Machine app authorised for the **Management API** with `create:users`, `update:users`, `create:user_tickets`.
-- Database connection: **Disable Sign Ups**; no social connections. Security: MFA policy on (required for Administrateur/Trésorier/Pasteur), brute-force and breached-password protection on.
+- Database connection: **Disable Sign Ups**; no social connections. Security: MFA policy on (required for Administrateur/Trésorier/Pasteur titulaire/Pasteur assistant), brute-force and breached-password protection on.
 - Email provider: configure a real one (not the built-in test sender) before go-live.
 - If you use an Auth0 **custom domain**, add it to `connect-src`/`frame-src` in `apps/web/public/_headers`.
 
@@ -100,7 +100,8 @@ Only after staging is clean: Actions → deploy → `production` (waits for revi
 - One `transactions` table; Recettes/Dépenses/Banques are filtered views, the Journal is the same table unfiltered.
 - Only `validee` rows count in balances; validated rows and closed periods are frozen by database triggers; corrections are reversing entries.
 - Every parish table has row-level security driven by `SET LOCAL app.parish_ids` per request transaction.
-- Separation of duties: nobody validates what they entered; Administrateur never enters/validates; Caissier/Trésorier/Pasteur/Administrateur profiles cannot be combined in one parish.
+- Separation of duties: nobody validates what they entered; Administrateur never enters/validates; Caissier/Trésorier/Pasteur/Administrateur profiles cannot be combined in one parish, nor Pasteur assistant with Pasteur, Caissier, Administrateur or Auditeur.
+- Effectifs des cultes, baptêmes and mariages use a second circuit: Pasteur assistant (`registry.validate1`) then Pasteur titulaire (`registry.validate2`, role key `pasteur`); submitted baptêmes/mariages are frozen by a database trigger.
 - Excel/PDF exports and the reçu are generated in the browser (keeps Worker CPU low).
 
 

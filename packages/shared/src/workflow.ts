@@ -1,4 +1,4 @@
-import { can } from "./permissions";
+import { can, type Permission } from "./permissions";
 import type { Role, TxStatus } from "./enums";
 
 export type TxAction = "submit" | "validate1" | "validate2" | "reject";
@@ -10,35 +10,58 @@ export interface TransitionInput {
   enteredBy: string;
   actorRoles: readonly Role[];
   comment?: string;
+  /** Who signed level 1, when the caller stores it: that person cannot also sign level 2. */
+  validator1Id?: string | null;
 }
 
 export class WorkflowError extends Error {}
 
+/** The permissions a validation circuit checks: who submits their own entry, who signs level 1, who signs level 2. */
+export interface Circuit { submit: Permission; validate1: Permission; validate2: Permission; submitError: string }
+
+/** Recettes, dépenses, transferts: Caissier → Trésorier → Pasteur titulaire. */
+export const TX_CIRCUIT: Circuit = {
+  submit: "transaction.create", validate1: "transaction.validate1", validate2: "transaction.validate2",
+  submitError: "Seul le caissier auteur peut soumettre",
+};
+/** Effectifs des cultes: counted by the Caissier, then Pasteur assistant → Pasteur titulaire. */
+export const ATTENDANCE_CIRCUIT: Circuit = {
+  submit: "transaction.create", validate1: "registry.validate1", validate2: "registry.validate2",
+  submitError: "Seul le caissier auteur peut soumettre",
+};
+/** Baptêmes and mariages: entered by any registry user, then Pasteur assistant → Pasteur titulaire. */
+export const REGISTRY_CIRCUIT: Circuit = {
+  submit: "registry.write", validate1: "registry.validate1", validate2: "registry.validate2",
+  submitError: "Seul l'auteur de l'enregistrement peut le soumettre",
+};
+
 /** Returns the next status or throws WorkflowError. Pure: no I/O. */
-export function transition(i: TransitionInput): TxStatus {
+export function transition(i: TransitionInput, c: Circuit = TX_CIRCUIT): TxStatus {
   switch (i.action) {
     case "submit":
       if (i.status !== "brouillon" && i.status !== "rejetee")
         throw new WorkflowError("Seules les écritures en brouillon ou rejetées peuvent être soumises");
-      if (!can(i.actorRoles, "transaction.create") || i.actorId !== i.enteredBy)
-        throw new WorkflowError("Seul le caissier auteur peut soumettre");
+      if (!can(i.actorRoles, c.submit) || i.actorId !== i.enteredBy)
+        throw new WorkflowError(c.submitError);
       return "soumise";
     case "validate1":
       requireNotAuthor(i);
       if (i.status !== "soumise") throw new WorkflowError("Première validation impossible dans cet état");
-      if (!can(i.actorRoles, "transaction.validate1")) throw new WorkflowError("Permission refusée");
+      if (!can(i.actorRoles, c.validate1)) throw new WorkflowError("Permission refusée");
       return "validee1";
     case "validate2":
       requireNotAuthor(i);
       if (i.status !== "validee1") throw new WorkflowError("Seconde validation impossible dans cet état");
-      if (!can(i.actorRoles, "transaction.validate2")) throw new WorkflowError("Permission refusée");
+      if (!can(i.actorRoles, c.validate2)) throw new WorkflowError("Permission refusée");
+      if (i.validator1Id && i.actorId === i.validator1Id)
+        throw new WorkflowError("Les deux validations doivent être faites par deux personnes différentes");
       return "validee";
     case "reject": {
       requireNotAuthor(i);
       if (!i.comment?.trim()) throw new WorkflowError("Un motif de rejet est obligatoire");
       const ok =
-        (i.status === "soumise" && can(i.actorRoles, "transaction.validate1")) ||
-        (i.status === "validee1" && can(i.actorRoles, "transaction.validate2"));
+        (i.status === "soumise" && can(i.actorRoles, c.validate1)) ||
+        (i.status === "validee1" && can(i.actorRoles, c.validate2));
       if (!ok) throw new WorkflowError("Rejet impossible dans cet état ou permission refusée");
       return "rejetee";
     }
@@ -149,4 +172,50 @@ export function assetRequestTransition(i: ChangeRequestTransitionInput & { n2Ski
     throw new WorkflowError("Le Trésorier et le Pasteur doivent être deux personnes différentes");
   const next = changeRequestTransition(i);
   return i.action === "approve1" && i.n2Skipped && next === "approuvee_n1" ? "approuvee_n2" : next;
+}
+
+// ---- Baptêmes et mariages: Pasteur assistant → Pasteur titulaire ------------------------------------
+
+export type RegistryAction = TxAction | "reopen";
+
+/** Status of a register entry plus the levels skipped at submission (recorded, never silent). */
+export interface RegistryState { status: TxStatus; n1Skipped: boolean; n2Skipped: boolean }
+
+/**
+ * Where a submitted baptême/mariage starts, with the same creator-skip as asset requests: an author who is the
+ * Pasteur assistant skips level 1 (the titulaire signs alone); an author who is the Pasteur titulaire skips level 2
+ * (the assistant's signature is final). An author holding both levels would skip everything, so is refused.
+ */
+export function registrySubmitState(authorRoles: readonly Role[]): RegistryState {
+  const isAssistant = can(authorRoles, REGISTRY_CIRCUIT.validate1);
+  const isTitulaire = can(authorRoles, REGISTRY_CIRCUIT.validate2);
+  if (isAssistant && isTitulaire)
+    throw new WorkflowError("Un auteur cumulant les rôles Pasteur assistant et Pasteur titulaire ne peut pas soumettre seul");
+  if (isAssistant) return { status: "validee1", n1Skipped: true, n2Skipped: false };
+  return { status: "soumise", n1Skipped: false, n2Skipped: isTitulaire };
+}
+
+export interface RegistryTransitionInput extends Omit<TransitionInput, "action"> {
+  action: RegistryAction;
+  n1Skipped: boolean;
+  n2Skipped: boolean;
+}
+
+/**
+ * transition() on REGISTRY_CIRCUIT, plus: the creator-skip (recomputed on every submission), level 1 is final when
+ * level 2 was skipped, and "reopen" (Renvoyer en correction): the Pasteur titulaire sends a validated entry back to
+ * its author with a motif; once corrected it goes through both levels again.
+ */
+export function registryTransition(i: RegistryTransitionInput): RegistryState {
+  const keep = { n1Skipped: i.n1Skipped, n2Skipped: i.n2Skipped };
+  if (i.action === "reopen") {
+    if (i.status !== "validee") throw new WorkflowError("Seul un enregistrement validé peut être renvoyé en correction");
+    if (!can(i.actorRoles, REGISTRY_CIRCUIT.validate2)) throw new WorkflowError("Seul le Pasteur titulaire peut renvoyer en correction");
+    if (!i.comment?.trim()) throw new WorkflowError("Un motif est obligatoire");
+    return { status: "rejetee", ...keep };
+  }
+  const next = transition({ ...i, action: i.action }, REGISTRY_CIRCUIT);
+  if (i.action === "submit") return registrySubmitState(i.actorRoles);
+  if (i.action === "validate1" && i.n2Skipped) return { status: "validee", ...keep };
+  return { status: next, ...keep };
 }

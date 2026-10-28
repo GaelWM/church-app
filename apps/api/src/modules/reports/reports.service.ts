@@ -132,17 +132,17 @@ export async function ouvriers(tx: Tx, actor: Actor, q: Q) {
   return { rows: [...rows].map((r: any) => ({ id: r.id, fullName: r.full_name, category: r.category, department: r.department, phone: r.phone, email: r.email, whatsapp: r.whatsapp, address: r.address, basicTeaching: r.basic_teaching_done, active: r.active })), totals: [], meta: { count: rows.length } };
 }
 
-async function register(tx: Tx, actor: Actor, q: Q, table: string, dateCol: string, cols: string, map: (r: any) => Record<string, unknown>) {
-  const rows = await repo.registerRows(tx, q, actor.parishId, table, dateCol, cols);
+async function register(tx: Tx, actor: Actor, q: Q, table: string, dateCol: string, cols: string, map: (r: any) => Record<string, unknown>, withStatus = false) {
+  const rows = await repo.registerRows(tx, q, actor.parishId, table, dateCol, cols, withStatus);
   return { rows: [...rows].map(map), totals: [], meta: { count: rows.length } };
 }
 
 export const dedicaces = (tx: Tx, actor: Actor, q: Q) => register(tx, actor, q, "child_dedications", "date", "id, date::text as date, child_name, mother_name, father_name, pastor_name, form_completed",
   (r) => ({ id: r.id, date: r.date, childName: r.child_name, motherName: r.mother_name, fatherName: r.father_name, pastorName: r.pastor_name, formCompleted: r.form_completed }));
-export const baptemes = (tx: Tx, actor: Actor, q: Q) => register(tx, actor, q, "baptisms", "date", "id, date::text as date, full_name, place, address, phone, email, whatsapp, pastor_name",
-  (r) => ({ id: r.id, date: r.date, fullName: r.full_name, place: r.place, address: r.address, phone: r.phone, email: r.email, whatsapp: r.whatsapp, pastorName: r.pastor_name }));
-export const mariages = (tx: Tx, actor: Actor, q: Q) => register(tx, actor, q, "marriages", "date", "id, date::text as date, husband_name, wife_name, couple_address, phone, pastor_name, blessing_place",
-  (r) => ({ id: r.id, date: r.date, husbandName: r.husband_name, wifeName: r.wife_name, coupleAddress: r.couple_address, phone: r.phone, pastorName: r.pastor_name, blessingPlace: r.blessing_place }));
+export const baptemes = (tx: Tx, actor: Actor, q: Q) => register(tx, actor, q, "baptisms", "date", "id, date::text as date, full_name, place, address, phone, email, whatsapp, pastor_name, status",
+  (r) => ({ id: r.id, date: r.date, fullName: r.full_name, place: r.place, address: r.address, phone: r.phone, email: r.email, whatsapp: r.whatsapp, pastorName: r.pastor_name, status: r.status }), true);
+export const mariages = (tx: Tx, actor: Actor, q: Q) => register(tx, actor, q, "marriages", "date", "id, date::text as date, husband_name, wife_name, couple_address, phone, pastor_name, blessing_place, status",
+  (r) => ({ id: r.id, date: r.date, husbandName: r.husband_name, wifeName: r.wife_name, coupleAddress: r.couple_address, phone: r.phone, pastorName: r.pastor_name, blessingPlace: r.blessing_place, status: r.status }), true);
 
 export async function byCategory(tx: Tx, actor: Actor, q: Q, kind: "recette" | "depense") {
   const rows = await repo.totalsByCategory(tx, q, actor.parishId, kind);

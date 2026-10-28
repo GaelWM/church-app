@@ -1,6 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import type { Tx } from "@church/db";
-import { can, transition, WorkflowError, type TxAction, type TxStatus } from "@church/shared";
+import { ATTENDANCE_CIRCUIT, can, transition, WorkflowError, type TxAction, type TxStatus } from "@church/shared";
 import { audit } from "../../services/audit";
 import type { AttendanceActionInput, AttendanceDayInput, AttendanceInput, AttendanceQuery, Counts, MemberInput, NewcomerInput, WorkerInput } from "./effectifs.dto";
 import * as repo from "./effectifs.repo";
@@ -31,7 +31,7 @@ async function checkDept(tx: Tx, parishId: string, departmentId: string | null) 
   if (!d) throw new HTTPException(422, { message: "Département inconnu pour cette paroisse" });
 }
 
-// Effectifs des cultes: one row per (paroisse, date, culte), same validation flow as transactions.
+// Effectifs des cultes: one row per (paroisse, date, culte), counted by the Caissier then validated by the Pasteur assistant and the Pasteur titulaire.
 export const listAttendance = (tx: Tx, q: AttendanceQuery) => repo.listAttendance(tx, q);
 
 export function saveAttendance(tx: Tx, actor: Actor, b: AttendanceInput) {
@@ -56,12 +56,18 @@ export async function transitionAttendance(tx: Tx, actor: Actor, id: string, act
   if (!a) throw new HTTPException(404);
   let next: TxStatus;
   try {
-    next = transition({ status: a.status as TxStatus, action, actorId: actor.userId, enteredBy: a.enteredBy, actorRoles: actor.roles, comment });
+    next = transition({ status: a.status as TxStatus, action, actorId: actor.userId, enteredBy: a.enteredBy, actorRoles: actor.roles, comment, validator1Id: a.validator1Id }, ATTENDANCE_CIRCUIT);
   } catch (e) {
     if (e instanceof WorkflowError) throw new HTTPException(422, { message: e.message });
     throw e;
   }
-  const u = await repo.setAttendanceStatus(tx, a.id, next);
+  const now = new Date();
+  const patch = action === "submit" ? { status: next, rejectionReason: null, validator1Id: null, validator1At: null, validator2Id: null, validator2At: null }
+    : action === "validate1" ? { status: next, validator1Id: actor.userId, validator1At: now }
+    : action === "validate2" ? { status: next, validator2Id: actor.userId, validator2At: now }
+    : { status: next, rejectionReason: comment!.trim() };
+  const u = await repo.setAttendanceStatus(tx, a.id, a.status, patch);
+  if (!u) throw new HTTPException(409, { message: "Ce comptage vient d'être traité par quelqu'un d'autre" });
   await audit(tx, { parishId: a.parishId, actorId: actor.userId, action: `attendance.${action}`, entity: "attendance", entityId: a.id, before: { status: a.status }, after: { status: next, comment } });
   return u;
 }

@@ -28,9 +28,10 @@ export async function findAttendance(tx: Tx, id: string) {
   return a;
 }
 
-export async function setAttendanceStatus(tx: Tx, id: string, status: string) {
-  const [u] = await tx.update(attendanceRecords).set({ status }).where(eq(attendanceRecords.id, id)).returning();
-  return u!;
+/** Compare-and-set on the status: undefined when someone else acted first. */
+export async function setAttendanceStatus(tx: Tx, id: string, from: string, patch: Partial<typeof attendanceRecords.$inferInsert>) {
+  const [u] = await tx.update(attendanceRecords).set(patch).where(and(eq(attendanceRecords.id, id), eq(attendanceRecords.status, from))).returning();
+  return u;
 }
 
 // Members

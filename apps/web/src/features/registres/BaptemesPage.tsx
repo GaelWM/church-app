@@ -2,7 +2,7 @@ import { Droplets } from "lucide-react";
 import { RegistrePage, type RegistreConfig } from "./RegistrePage";
 
 const cfg: RegistreConfig = {
-  type: "baptisms", title: "Baptême", newLabel: "Nouveau baptême", newTitle: "Nouveau baptême", editTitle: "Baptême", icon: Droplets,
+  workflow: true, type: "baptisms", title: "Baptême", newLabel: "Nouveau baptême", newTitle: "Nouveau baptême", editTitle: "Baptême", icon: Droplets,
   fileLabel: "Carte de baptême", searchHint: "Nom, téléphone, email, lieu…", nameOf: (r) => r.fullName,
   fields: [
     { key: "fullName", label: "Nom(s)", required: true },

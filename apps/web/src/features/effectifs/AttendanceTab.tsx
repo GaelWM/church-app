@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Check, Save, Send, Users, X } from "lucide-react";
-import { CULTE_TYPES } from "@church/shared";
+import { CULTE_TYPES, REGISTRY_STATUS_LABELS } from "@church/shared";
 import { Input } from "@/components/ui/input";
 import { ActionButton, Card, DataTable, ErrorNote, ExportButtons, ReasonButton, StatusBadge } from "@/components/common";
 import { DatePicker, DateRangePicker, OptionSelect, dateLimits } from "@/components/form-controls";
@@ -11,7 +11,7 @@ import { fmtDate, today } from "../../core/format";
 import { useInvalidateLedger, useScopedKey } from "../../core/queries";
 import { useSession } from "../../core/session";
 
-export interface Att { id: string; serviceDate: string; serviceType: string; mAdulte: number; mEnfant: number; mBebe: number; fAdulte: number; fEnfant: number; fBebe: number; status: any; enteredBy: string }
+export interface Att { id: string; serviceDate: string; serviceType: string; mAdulte: number; mEnfant: number; mBebe: number; fAdulte: number; fEnfant: number; fBebe: number; status: any; enteredBy: string; rejectionReason: string | null }
 const KEYS = ["mAdulte", "mEnfant", "mBebe", "fAdulte", "fEnfant", "fBebe"] as const;
 type K = (typeof KEYS)[number];
 const LABELS: Record<K, string> = { mAdulte: "Hommes", mEnfant: "Garçons", mBebe: "Bébés (M)", fAdulte: "Femmes", fEnfant: "Filles", fBebe: "Bébés (F)" };
@@ -73,8 +73,9 @@ function DayEntry() {
           return (
             <div key={t} className="rounded-md border p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <b className="text-sm">{t}</b>{a && <StatusBadge status={a.status} />}
+                <b className="text-sm">{t}</b>{a && <StatusBadge status={a.status} labels={REGISTRY_STATUS_LABELS} />}
               </div>
+              {a?.status === "rejetee" && a.rejectionReason && <p className="mb-2 text-xs text-destructive">Motif du rejet : {a.rejectionReason}</p>}
               <div className="grid grid-cols-3 gap-2">
                 {KEYS.map((k) => (
                   <label key={k} className="flex flex-col gap-1 text-xs text-muted-foreground">{LABELS[k]}
@@ -114,7 +115,7 @@ function History() {
     return {
       title: "État des effectifs", subtitle: `${range.from ? fmtDate(range.from) : "…"} – ${range.to ? fmtDate(range.to) : "…"}${type ? ` · ${type}` : ""}`,
       columns: [{ header: "Date", key: "date" }, { header: "Culte", key: "type" }, ...KEYS.map((k) => ({ header: SHORT[k], key: k, align: "right" as const })), { header: "Total", key: "total", align: "right" as const }, { header: "Statut", key: "status" }],
-      rows: rows.map((a) => ({ date: fmtDate(a.serviceDate), type: a.serviceType, ...Object.fromEntries(KEYS.map((k) => [k, a[k]])), total: total(a), status: a.status })),
+      rows: rows.map((a) => ({ date: fmtDate(a.serviceDate), type: a.serviceType, ...Object.fromEntries(KEYS.map((k) => [k, a[k]])), total: total(a), status: REGISTRY_STATUS_LABELS[a.status as keyof typeof REGISTRY_STATUS_LABELS] ?? a.status })),
       totals: { date: "Total", ...sum, total: total(sum as any) },
     };
   };
@@ -122,7 +123,7 @@ function History() {
   const rej = (a: Att) => <ReasonButton danger icon={X} label="Rejeter" onConfirm={(comment) => act.mutate({ id: a.id, action: "reject", comment })} />;
 
   return (
-    <Card title="Historique des effectifs" actions={<span className="flex flex-wrap items-center gap-2"><ValidationFlowButton counts={countByStatus(list.data)} /><ExportButtons spec={spec} /></span>}>
+    <Card title="Historique des effectifs" actions={<span className="flex flex-wrap items-center gap-2"><ValidationFlowButton circuit="effectifs" counts={countByStatus(list.data)} /><ExportButtons spec={spec} /></span>}>
       <div className="mb-3 flex flex-wrap gap-2">
         <DateRangePicker from={range.from} to={range.to} onChange={setRange} className="w-auto" />
         <OptionSelect className="w-auto min-w-44" size="sm" aria-label="Culte" value={type} onValueChange={setType} placeholder="Tous les cultes" options={[{ value: "", label: "Tous les cultes" }, ...CULTE_TYPES.map((t) => ({ value: t, label: t }))]} />
@@ -131,14 +132,15 @@ function History() {
       <DataTable<Att> rows={rows} loading={list.isLoading} emptyIcon={Users} empty="Aucun effectif enregistré" pageSize={25} columns={[
         { header: "Date", cell: (a) => fmtDate(a.serviceDate), sort: (a) => a.serviceDate }, { header: "Culte", cell: (a) => a.serviceType, sort: (a) => a.serviceType },
         ...KEYS.map((k) => ({ header: SHORT[k], align: "right" as const, cell: (a: Att) => a[k] })),
-        { header: "Total", align: "right", cell: (a) => <b>{total(a)}</b>, sort: total }, { header: "Statut", cell: (a) => <StatusBadge status={a.status} /> },
+        { header: "Total", align: "right", cell: (a) => <b>{total(a)}</b>, sort: total },
+        { header: "Statut", cell: (a) => <span title={a.status === "rejetee" && a.rejectionReason ? `Motif : ${a.rejectionReason}` : undefined}><StatusBadge status={a.status} labels={REGISTRY_STATUS_LABELS} /></span> },
         { header: "", cell: (a) => {
           const mine = a.enteredBy === s.me.user.id;
           return (
             <span className="actions">
               {canEnter && mine && (a.status === "brouillon" || a.status === "rejetee") && <ActionButton size="sm" icon={Send} pending={act.isPending && act.variables?.id === a.id && act.variables?.action === "submit"} onClick={() => act.mutate({ id: a.id, action: "submit" })}>Soumettre</ActionButton>}
-              {!mine && a.status === "soumise" && s.can("transaction.validate1") && <>{btn(a, "validate1", "Valider")}{rej(a)}</>}
-              {!mine && a.status === "validee1" && s.can("transaction.validate2") && <>{btn(a, "validate2", "Valider")}{rej(a)}</>}
+              {!mine && a.status === "soumise" && s.can("registry.validate1") && !s.consolidated && <>{btn(a, "validate1", "Valider")}{rej(a)}</>}
+              {!mine && a.status === "validee1" && s.can("registry.validate2") && !s.consolidated && <>{btn(a, "validate2", "Valider")}{rej(a)}</>}
             </span>);
         } },
       ]} />

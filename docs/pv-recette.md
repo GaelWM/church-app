@@ -18,6 +18,17 @@
 | 15 | Effectifs par date, culte, sexe, nature | effectifs.test.ts | | |
 Extra §27 : change-requests.test.ts (demande, double approbation, rejet, exécution).
 
+## Pasteur titulaire / Pasteur assistant, Affermissement (demande du 11/10/2026)
+| # | Critère | Test automatisé | Résultat (OK / KO) | Date / Visa |
+|---|---|---|---|---|
+| P1 | Deux profils distincts, Pasteur titulaire et Pasteur assistant, incompatibles entre eux | workflow.test.ts | | |
+| P2 | Pasteur assistant : 1re validation des effectifs ; le Trésorier ne valide plus les effectifs ; Pasteur titulaire validateur final | effectifs.test.ts, workflow.test.ts | | |
+| P3 | Baptêmes et mariages : Brouillon → Soumise → Validée 1 (Pasteur assistant) → Validée (Pasteur titulaire), rejet motivé, entrée gelée une fois soumise (API et base) | registres.test.ts, workflow.test.ts | | |
+| P4 | Les deux validations par deux personnes différentes ; niveau de l'auteur sauté et tracé | registres.test.ts, effectifs.test.ts, workflow.test.ts | | |
+| P5 | Pasteur assistant : aucun accès aux finances ni aux soldes des comptes (tableau de bord, journal, banques, rapports, pièces, alertes) | pasteur-assistant.test.ts | | |
+| P6 | Département Affermissement présent dans chaque paroisse ; ajout et renommage dans Configuration | departments.test.ts | | |
+| P7 | Parcours complet dans l'interface (Effectifs, Baptême, Mariage, Configuration › Départements) | manuel | | |
+
 ## Immobilisations (spec « MENU IMMOBILISATIONS »)
 | # | Critère | Test automatisé | Résultat (OK / KO) | Date / Visa |
 |---|---|---|---|---|

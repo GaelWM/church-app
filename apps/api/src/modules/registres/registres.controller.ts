@@ -1,13 +1,14 @@
 import type { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { can } from "@church/shared";
+import { can, type RegistryAction } from "@church/shared";
 import type { AppEnv } from "../../env";
 import { requireParish } from "../../middleware/auth";
 import { run } from "../../services/run";
+import type { RecordActionInput } from "./registres.dto";
 import * as service from "./registres.service";
 
 type C = Context<AppEnv>;
-const actorOf = (c: C): service.Actor => ({ userId: c.get("user").id });
+const actorOf = (c: C): service.Actor => ({ userId: c.get("user").id, roles: c.get("roles") });
 
 const typeOf = (c: C): service.TypeKey => {
   const t = c.req.param("type" as never) as string;
@@ -24,7 +25,7 @@ async function removeFiles(c: C, keys: string[]) {
   await Promise.all(keys.map((k) => c.env.FILES.delete(k)));
 }
 
-// Active users holding the Pasteur role in the current parish: feeds the "Pasteur" dropdowns.
+// Active users holding a Pasteur role (titulaire or assistant) in the current parish: feeds the "Pasteur" dropdowns.
 export const listPastors = async (c: C) => {
   const parishId = c.get("parishId");
   if (!parishId) return c.json([]); // consolidated view is read-only: nothing to pick
@@ -99,4 +100,11 @@ export const deleteRecord = async (c: C) => {
   const keys = await run(c, (tx) => service.deleteRecord(tx, actor, t, id));
   await removeFiles(c, keys);
   return c.body(null, 204);
+};
+
+export const actOnRecord = (action: RegistryAction) => async (c: C, body: RecordActionInput) => {
+  const t = typeOf(c);
+  const actor = actorOf(c);
+  const id = c.req.param("id" as never) as string;
+  return c.json(await run(c, (tx) => service.actOnRecord(tx, actor, t, id, action, body)));
 };

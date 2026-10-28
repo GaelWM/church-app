@@ -103,6 +103,7 @@ export async function attendanceRows(tx: Tx, q: Q, parishId: string | null, fiel
         parishId ? sql`parish_id = ${parishId}::uuid` : sql`true`,
         q.from ? sql`service_date >= ${q.from}::date` : sql`true`, q.to ? sql`service_date <= ${q.to}::date` : sql`true`,
         q.serviceType ? sql`service_type = ${q.serviceType}` : sql`true`,
+        q.status ? sql`status in (${inList(q.status.split(","))})` : sql`true`,
       ], sql` and `)} order by service_date, service_type`);
 }
 
@@ -126,11 +127,13 @@ export async function workerRows(tx: Tx, q: Q, parishId: string | null) {
       ${q.q ? sql`and w.full_name ilike ${"%" + q.q + "%"}` : sql``} order by w.category, w.full_name`);
 }
 
-export async function registerRows(tx: Tx, q: Q, parishId: string | null, table: string, dateCol: string, cols: string) {
+/** `withStatus`: the register has the validation circuit (baptêmes, mariages), so `q.status` filters it. */
+export async function registerRows(tx: Tx, q: Q, parishId: string | null, table: string, dateCol: string, cols: string, withStatus = false) {
   return await tx.execute(sql`
     select ${sql.raw(cols)} from ${sql.raw(table)} where ${sql.join([
       parishId ? sql`parish_id = ${parishId}::uuid` : sql`true`,
       q.from ? sql`${sql.raw(dateCol)} >= ${q.from}::date` : sql`true`, q.to ? sql`${sql.raw(dateCol)} <= ${q.to}::date` : sql`true`,
+      withStatus && q.status ? sql`status in (${inList(q.status.split(","))})` : sql`true`,
     ], sql` and `)} order by ${sql.raw(dateCol)}`);
 }
 

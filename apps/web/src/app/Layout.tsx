@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ComponentType } from "react";
 import { Archive, ArrowDownToLine, ArrowUpFromLine, BookOpen, Building2, CheckCheck, ChevronDown, Handshake, Landmark, LayoutDashboard, LogOut, Menu, PiggyBank, Settings, Users, WifiOff, Eye, Baby, Droplets, Heart, FileBarChart } from "lucide-react";
+import { ROLE_LABELS } from "@church/shared";
 import { Banner } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -145,7 +146,7 @@ export function Layout() {
               <DropdownMenuLabel className="font-normal">
                 <div className="font-medium">{s.me.user.fullName}</div>
                 <div className="text-xs text-muted-foreground">{s.me.user.email}</div>
-                <div className="text-xs text-muted-foreground">{s.roles.join(", ")}</div>
+                <div className="text-xs text-muted-foreground">{s.roles.map((r) => ROLE_LABELS[r]).join(", ")}</div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => logout()}><LogOut /> Déconnexion</DropdownMenuItem>

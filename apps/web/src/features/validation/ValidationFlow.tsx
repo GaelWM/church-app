@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { BadgeCheck, Eye, Lock, Mail, Scale, ShieldCheck, Workflow } from "lucide-react";
-import { ROLE_LABELS, STATUS_LABELS, type Role, type TxStatus } from "@church/shared";
+import { ROLE_LABELS, STATUS_LABELS, type Permission, type Role, type TxStatus } from "@church/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,9 +8,13 @@ import { useSession } from "../../core/session";
 
 /**
  * The validation circuit every transaction goes through, drawn like the state diagram in the design:
- * Brouillon → Soumise → Validée 1 (Trésorier) → Validée (Pasteur), with Rejetée looping back to Soumise.
- * The steps the signed-in role performs are highlighted and explained below the diagram.
+ * Brouillon → Soumise → Validée 1 (Trésorier) → Validée (Pasteur titulaire), with Rejetée looping back to Soumise.
+ * The effectifs des cultes and the baptême / mariage registers use the same states, with the Pasteur assistant
+ * at level 1 (`circuit` prop). The steps the signed-in user performs are highlighted and explained below the diagram.
  */
+
+/** transaction: recettes, dépenses, banques. effectifs: comptages des cultes. registres: baptêmes and mariages. */
+export type FlowCircuit = "transaction" | "effectifs" | "registres";
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -19,6 +23,7 @@ const ROLE_STEPS: Record<Role, Step[]> = {
   caissier: [1, 2, 7],
   tresorier: [3, 4],
   pasteur: [5, 6],
+  pasteur_assistant: [],
   administrateur: [],
   auditeur: [],
   evangelisation: [],
@@ -29,6 +34,7 @@ const ROLE_NODES: Record<Role, TxStatus[]> = {
   caissier: ["brouillon", "rejetee"],
   tresorier: ["soumise"],
   pasteur: ["validee1"],
+  pasteur_assistant: [],
   administrateur: [],
   auditeur: [],
   evangelisation: [],
@@ -62,7 +68,7 @@ const EXPLANATIONS: Record<Role, Explanation> = {
     note: <>Vous ne pouvez pas valider une écriture que vous avez saisie vous-même. Vous pointez aussi le relevé bancaire (rapprochement).</>,
   },
   pasteur: {
-    title: "Pasteur : seconde validation",
+    title: "Pasteur titulaire : seconde validation",
     icon: <ShieldCheck className="size-4" />,
     steps: [
       <>Ouvrez <b>À valider</b> : les écritures <b>Validée 1</b> ont déjà l'accord du Trésorier.</>,
@@ -89,6 +95,14 @@ const EXPLANATIONS: Record<Role, Explanation> = {
     ],
     note: <>Vous pouvez exporter les rapports en Excel et PDF.</>,
   },
+  pasteur_assistant: {
+    title: "Pasteur assistant : effectifs et registres",
+    icon: <Eye className="size-4" />,
+    steps: [
+      <>Vous donnez la <b>première validation</b> des effectifs des cultes, des baptêmes et des mariages (circuit affiché sur ces pages).</>,
+      <>Vous n'avez accès ni à la Saisie, ni aux Banques, au Journal, aux Engagements, aux rapports ou aux soldes des comptes.</>,
+    ],
+  },
   evangelisation: {
     title: "Évangélisation : effectifs et registres",
     icon: <Eye className="size-4" />,
@@ -99,15 +113,72 @@ const EXPLANATIONS: Record<Role, Explanation> = {
   },
 };
 
+/** Effectifs and registres: who acts is read from the permissions, not the role (several roles may enter an entry). */
+const CIRCUIT_SUBMIT: Record<Exclude<FlowCircuit, "transaction">, Permission> = { effectifs: "transaction.create", registres: "registry.write" };
+
+function registryExplanations(circuit: Exclude<FlowCircuit, "transaction">, can: (p: Permission) => boolean): Explanation[] {
+  const what = circuit === "effectifs" ? "le comptage" : "l'entrée";
+  const out: Explanation[] = [];
+  if (can(CIRCUIT_SUBMIT[circuit])) out.push({
+    title: circuit === "effectifs" ? "Caissier : vous comptez" : "Vous enregistrez",
+    icon: <BadgeCheck className="size-4" />,
+    steps: [
+      <><b>1 · Enregistrer</b> {what} : en <b>Brouillon</b>, vous seul pouvez encore {circuit === "effectifs" ? "le" : "la"} modifier{circuit === "registres" && " ou la supprimer"}.</>,
+      <><b>2 · Soumettre</b> : {what} est verrouillé{circuit === "registres" && "e"} et part chez le Pasteur assistant (<b>Soumise</b>).</>,
+      <><b>7 · Corriger</b> : si {circuit === "effectifs" ? "il" : "elle"} est <b>Rejeté{circuit === "registres" && "e"}</b>, le motif est affiché ; corrigez puis soumettez à nouveau. {circuit === "effectifs" ? "Il" : "Elle"} repasse par les deux validations.</>,
+    ],
+    note: circuit === "registres"
+      ? <>Si vous êtes vous-même Pasteur assistant, votre niveau est sauté et seul le Pasteur titulaire valide. Si vous êtes le Pasteur titulaire, la validation du Pasteur assistant est définitive. Le niveau sauté est indiqué sur l'entrée.</>
+      : undefined,
+  });
+  if (can("registry.validate1")) out.push({
+    title: "Pasteur assistant : première validation",
+    icon: <ShieldCheck className="size-4" />,
+    steps: [
+      <>Les {circuit === "effectifs" ? "comptages" : "entrées"} <b>Soumis{circuit === "registres" && "es"}</b> vous attendent{circuit === "registres" && <> (filtre <b>Statut › À valider</b>)</>}.</>,
+      <><b>3 · Valider</b> : {what} passe en <b>Validé{circuit === "registres" && "e"} 1</b> et attend le Pasteur titulaire.</>,
+      <><b>4 · Rejeter</b> : un <b>motif écrit est obligatoire</b> ; {what} retourne à son auteur, qui voit le motif.</>,
+    ],
+    note: <>Vous ne validez jamais ce que vous avez saisi vous-même.</>,
+  });
+  if (can("registry.validate2")) out.push({
+    title: "Pasteur titulaire : validation finale",
+    icon: <ShieldCheck className="size-4" />,
+    steps: [
+      <>Les {circuit === "effectifs" ? "comptages" : "entrées"} <b>Validé{circuit === "registres" && "e"}s 1</b> ont déjà l'accord du Pasteur assistant.</>,
+      <><b>5 · Valider</b> : {what} devient <b>Validé{circuit === "registres" && "e"}</b>.</>,
+      <><b>6 · Rejeter</b> : avec un motif obligatoire, {what} retourne à son auteur et repasse par les deux validations.</>,
+    ],
+    note: circuit === "registres" ? <>Une entrée validée qui contient une erreur peut être <b>renvoyée en correction</b>, avec un motif : l'auteur la corrige et elle repasse par les deux validations.</> : undefined,
+  });
+  if (!out.length) out.push({
+    title: "Vous consultez",
+    icon: <Eye className="size-4" />,
+    steps: [<>Vous voyez les {circuit === "effectifs" ? "comptages" : "entrées"} et leur statut, sans intervenir dans le circuit.</>],
+  });
+  return out;
+}
+
 // ── Diagram geometry (viewBox 1040 × 236) ────────────────────────────────────
 const NODE = { h: 44, y: 38 };
 const NODES: Record<TxStatus, { x: number; w: number; y: number; label: string }> = {
   brouillon: { x: 78, w: 104, y: NODE.y, label: STATUS_LABELS.brouillon },
   soumise: { x: 300, w: 104, y: NODE.y, label: STATUS_LABELS.soumise },
-  validee1: { x: 540, w: 176, y: NODE.y, label: STATUS_LABELS.validee1 },
-  validee: { x: 836, w: 138, y: NODE.y, label: "Validée (Pasteur)" },
+  validee1: { x: 540, w: 176, y: NODE.y, label: "Validée 1" },
+  validee: { x: 836, w: 138, y: NODE.y, label: STATUS_LABELS.validee },
   rejetee: { x: 380, w: 110, y: 160, label: STATUS_LABELS.rejetee },
   annulee: { x: 0, w: 0, y: 0, label: STATUS_LABELS.annulee }, // not drawn: cancellation goes through a change request
+};
+/** Who signs each validated state, drawn on a second line inside the box. */
+const SIGNERS: Record<FlowCircuit, Partial<Record<TxStatus, string>>> = {
+  transaction: { validee1: "Trésorier", validee: "Pasteur titulaire" },
+  effectifs: { validee1: "Pasteur assistant", validee: "Pasteur titulaire" },
+  registres: { validee1: "Pasteur assistant", validee: "Pasteur titulaire" },
+};
+const ARIA: Record<FlowCircuit, string> = {
+  transaction: "Circuit de validation : Brouillon, Soumise, Validée 1 par le Trésorier, Validée par le Pasteur titulaire; une écriture Rejetée retourne au Caissier qui la corrige et la soumet à nouveau.",
+  effectifs: "Circuit de validation des effectifs : Brouillon, Soumis, Validé 1 par le Pasteur assistant, Validé par le Pasteur titulaire; un comptage Rejeté retourne au Caissier qui le corrige et le soumet à nouveau.",
+  registres: "Circuit de validation des registres : Brouillon, Soumise, Validée 1 par le Pasteur assistant, Validée par le Pasteur titulaire; une entrée Rejetée retourne à son auteur qui la corrige et la soumet à nouveau.",
 };
 
 const ARROWS: { step: Step; d: string; badge: [number, number]; label: [number, number, "start" | "middle" | "end"] | null }[] = [
@@ -120,10 +191,9 @@ const ARROWS: { step: Step; d: string; badge: [number, number]; label: [number, 
   { step: 7, d: "M424 160 V118 Q424 90 372 82", badge: [424, 140], label: [442, 144, "start"] },
 ];
 
-function Diagram({ mine, todo, counts }: { mine: Set<Step>; todo: Set<TxStatus>; counts?: Partial<Record<TxStatus, number>> }) {
+function Diagram({ circuit, mine, todo, counts }: { circuit: FlowCircuit; mine: Set<Step>; todo: Set<TxStatus>; counts?: Partial<Record<TxStatus, number>> }) {
   return (
-    <svg viewBox="0 0 1040 236" role="img" className="min-w-[760px] w-full text-foreground"
-      aria-label="Circuit de validation : Brouillon, Soumise, Validée 1 par le Trésorier, Validée par le Pasteur; une écriture Rejetée retourne au Caissier qui la corrige et la soumet à nouveau.">
+    <svg viewBox="0 0 1040 236" role="img" className="min-w-[760px] w-full text-foreground" aria-label={ARIA[circuit]}>
       <defs>
         {(["own", "other"] as const).map((k) => (
           <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -156,10 +226,12 @@ function Diagram({ mine, todo, counts }: { mine: Set<Step>; todo: Set<TxStatus>;
         const n = NODES[k];
         const act = todo.has(k);
         const count = counts?.[k];
+        const signer = SIGNERS[circuit][k];
         return (
           <g key={k}>
             <rect x={n.x} y={n.y} width={n.w} height={NODE.h} rx="10" fill={act ? "color-mix(in oklab, var(--primary) 12%, var(--card))" : "var(--card)"} stroke={act ? "var(--primary)" : "var(--border)"} strokeWidth={act ? 2 : 1.2} />
-            <text x={n.x + n.w / 2} y={n.y + NODE.h / 2 + 4.5} textAnchor="middle" fontSize="13.5" fontWeight={act ? 600 : 500} fill="var(--foreground)">{n.label}</text>
+            <text x={n.x + n.w / 2} y={n.y + (signer ? 18 : NODE.h / 2 + 4.5)} textAnchor="middle" fontSize="13.5" fontWeight={act ? 600 : 500} fill="var(--foreground)">{n.label}</text>
+            {signer && <text x={n.x + n.w / 2} y={n.y + 34} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">{signer}</text>}
             {count !== undefined && count > 0 && (
               <g>
                 <circle cx={n.x + n.w - 4} cy={n.y + 2} r="11" fill={act ? "var(--primary)" : "var(--muted-foreground)"} />
@@ -173,44 +245,65 @@ function Diagram({ mine, todo, counts }: { mine: Set<Step>; todo: Set<TxStatus>;
   );
 }
 
+const LOCK_TEXT: Record<FlowCircuit, ReactNode> = {
+  transaction: <>Seules les écritures <b className="text-foreground">Validées</b> comptent dans les soldes, le tableau de bord et les rapports. Personne ne valide ce qu'il a saisi lui-même, et une écriture validée n'est jamais modifiée.</>,
+  effectifs: <>Un comptage soumis est verrouillé. Personne ne valide ce qu'il a saisi lui-même, et les deux validations sont données par deux personnes différentes.</>,
+  registres: <>Une entrée soumise est verrouillée ; les pièces jointes peuvent encore être ajoutées. Personne ne valide ce qu'il a saisi lui-même, et les deux validations sont données par deux personnes différentes.</>,
+};
+
+/** Steps and "to do" boxes of the signed-in user on a registry circuit, from their permissions. */
+function registrySteps(circuit: Exclude<FlowCircuit, "transaction">, can: (p: Permission) => boolean): { mine: Step[]; todo: TxStatus[] } {
+  const mine: Step[] = [], todo: TxStatus[] = [];
+  if (can(CIRCUIT_SUBMIT[circuit])) { mine.push(1, 2, 7); todo.push("brouillon", "rejetee"); }
+  if (can("registry.validate1")) { mine.push(3, 4); todo.push("soumise"); }
+  if (can("registry.validate2")) { mine.push(5, 6); todo.push("validee1"); }
+  return { mine, todo };
+}
+
 /** Diagram + role-specific explanation (the modal's content). */
-function FlowBody({ counts }: { counts?: Partial<Record<TxStatus, number>> }) {
+function FlowBody({ circuit, counts }: { circuit: FlowCircuit; counts?: Partial<Record<TxStatus, number>> }) {
   const s = useSession();
   const roles: Role[] = s.consolidated ? [] : s.roles;
-  const mine = new Set<Step>(roles.flatMap((r) => ROLE_STEPS[r]));
-  const todo = new Set<TxStatus>(roles.flatMap((r) => ROLE_NODES[r]));
+  const can = (p: Permission) => !s.consolidated && s.can(p);
+  const reg = circuit === "transaction" ? null : registrySteps(circuit, can);
+  const mine = new Set<Step>(reg ? reg.mine : roles.flatMap((r) => ROLE_STEPS[r]));
+  const todo = new Set<TxStatus>(reg ? reg.todo : roles.flatMap((r) => ROLE_NODES[r]));
+  const cards = circuit === "transaction"
+    ? roles.map((r) => ({ key: r as string, e: EXPLANATIONS[r], noteIcon: r === "tresorier" ? Scale : Mail }))
+    : registryExplanations(circuit, can).map((e) => ({ key: e.title, e, noteIcon: Lock }));
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto"><Diagram mine={mine} todo={todo} counts={counts} /></div>
+      <div className="overflow-x-auto"><Diagram circuit={circuit} mine={mine} todo={todo} counts={counts} /></div>
 
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <Lock className="mt-0.5 size-4 shrink-0" />
-        <span>Seules les écritures <b className="text-foreground">Validées</b> comptent dans les soldes, le tableau de bord et les rapports. Personne ne valide ce qu'il a saisi lui-même, et une écriture validée n'est jamais modifiée.</span>
+        <span>{LOCK_TEXT[circuit]}</span>
       </p>
 
       {s.consolidated ? (
         <p className="flex items-start gap-2 text-sm"><Eye className="mt-0.5 size-4 shrink-0 text-muted-foreground" />Vue consolidée : vous consultez toutes les paroisses en lecture seule. Choisissez une paroisse pour agir dans le circuit.</p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {roles.map((r) => {
-            const e = EXPLANATIONS[r];
-            return (
-              <div key={r} className="rounded-lg border bg-muted/30 p-3 text-sm">
-                <h4 className="mb-2 flex items-center gap-2 font-medium">{e.icon}{e.title}</h4>
-                <ol className="space-y-1.5">{e.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
-                {e.note && <p className="mt-2 flex items-start gap-2 text-muted-foreground">{r === "tresorier" ? <Scale className="mt-0.5 size-4 shrink-0" /> : <Mail className="mt-0.5 size-4 shrink-0" />}<span>{e.note}</span></p>}
-              </div>
-            );
-          })}
+          {cards.map(({ key, e, noteIcon: NoteIcon }) => (
+            <div key={key} className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <h4 className="mb-2 flex items-center gap-2 font-medium">{e.icon}{e.title}</h4>
+              <ol className="space-y-1.5">{e.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
+              {e.note && <p className="mt-2 flex items-start gap-2 text-muted-foreground"><NoteIcon className="mt-0.5 size-4 shrink-0" /><span>{e.note}</span></p>}
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
+const SUBJECT: Record<FlowCircuit, string> = {
+  transaction: "Comment une écriture est validée", effectifs: "Comment un comptage des cultes est validé", registres: "Comment une entrée du registre est validée",
+};
+
 /** Workflow icon button that opens the workflow, explained for the signed-in role, in a modal. */
-export function ValidationFlowButton({ counts }: { counts?: Partial<Record<TxStatus, number>> }) {
+export function ValidationFlowButton({ counts, circuit = "transaction" }: { counts?: Partial<Record<TxStatus, number>>; circuit?: FlowCircuit }) {
   const s = useSession();
   const [open, setOpen] = useState(false);
   const roles: Role[] = s.consolidated ? [] : s.roles;
@@ -222,11 +315,11 @@ export function ValidationFlowButton({ counts }: { counts?: Partial<Record<TxSta
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Workflow className="size-5" />Circuit de validation</DialogTitle>
             <DialogDescription className="flex flex-wrap items-center gap-1.5">
-              Comment une écriture est validée{roles.length > 0 && <> · vous êtes :</>}
+              {SUBJECT[circuit]}{roles.length > 0 && <> · vous êtes :</>}
               {roles.map((r) => <Badge key={r} variant="secondary">{ROLE_LABELS[r]}</Badge>)}
             </DialogDescription>
           </DialogHeader>
-          <FlowBody counts={counts} />
+          <FlowBody circuit={circuit} counts={counts} />
         </DialogContent>
       </Dialog>
     </>

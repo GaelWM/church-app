@@ -1,4 +1,4 @@
-import { CULTE_TYPES, ENGAGEMENT_TYPE_LABELS, STATUS_LABELS, WORKER_CATEGORY_LABELS, type Currency } from "@church/shared";
+import { CULTE_TYPES, ENGAGEMENT_TYPE_LABELS, REGISTRY_STATUS_LABELS, STATUS_LABELS, WORKER_CATEGORY_LABELS, type Currency } from "@church/shared";
 import { fmtDate, label, money } from "../../core/format";
 
 export type FilterKey = "period" | "currency" | "accountId" | "categoryId" | "status" | "enteredBy" | "validator" | "engType" | "serviceType" | "workerCategory" | "q";
@@ -10,6 +10,8 @@ export interface ReportDef {
   filters: FilterKey[]; columns: ColDef[];
   /** Default query params (e.g. validated only). */
   defaults?: Record<string, string>;
+  /** Effectifs, baptêmes, mariages: level 1 is the Pasteur assistant and nothing is ever "Annulée". */
+  registryStatus?: boolean;
   /** Server totals → column keys (per-currency array, or a single object for counts). */
   totalMap?: Record<string, string>; totalLabelCol: string;
   /** Extra text for the "Total" row (e.g. opening / closing balances). */
@@ -87,7 +89,7 @@ export const REPORTS: ReportDef[] = [
   },
   {
     key: "effectifs", title: "Effectifs", description: "Fréquentation par date et par type de culte (sexe × nature).",
-    filters: ["period", "serviceType"], totalLabelCol: "serviceType",
+    filters: ["period", "serviceType", "status"], registryStatus: true, totalLabelCol: "serviceType",
     columns: [D("date", "Date"), T("serviceType", "Culte"), ...counts.map((k, i) => N(k, countHeaders[i]!)), N("total", "Total culte"), N("dayTotal", "Total journée")],
     totalMap: Object.fromEntries([...counts, "total"].map((k) => [k, k])),
   },
@@ -109,12 +111,14 @@ export const REPORTS: ReportDef[] = [
     columns: [D("date", "Date"), T("childName", "Enfant"), T("motherName", "Mère"), T("fatherName", "Père"), T("pastorName", "Pasteur"), { key: "formCompleted", header: "Fiche remplie", kind: "bool" }],
   },
   {
-    key: "baptemes", title: "Baptêmes", description: "Registre des baptêmes.", filters: period, totalLabelCol: "fullName",
-    columns: [D("date", "Date"), T("fullName", "Nom"), T("place", "Lieu"), T("phone", "Téléphone"), T("address", "Adresse"), T("pastorName", "Pasteur")],
+    key: "baptemes", title: "Baptêmes", description: "Registre des baptêmes.", filters: ["period", "status"], registryStatus: true, totalLabelCol: "fullName",
+    columns: [D("date", "Date"), T("fullName", "Nom"), T("place", "Lieu"), T("phone", "Téléphone"), T("address", "Adresse"), T("pastorName", "Pasteur"),
+      { key: "status", header: "Statut", kind: "enum", labels: REGISTRY_STATUS_LABELS }],
   },
   {
-    key: "mariages", title: "Mariages", description: "Registre des mariages.", filters: period, totalLabelCol: "husbandName",
-    columns: [D("date", "Date"), T("husbandName", "Époux"), T("wifeName", "Épouse"), T("coupleAddress", "Adresse"), T("phone", "Téléphone"), T("pastorName", "Pasteur"), T("blessingPlace", "Lieu de bénédiction")],
+    key: "mariages", title: "Mariages", description: "Registre des mariages.", filters: ["period", "status"], registryStatus: true, totalLabelCol: "husbandName",
+    columns: [D("date", "Date"), T("husbandName", "Époux"), T("wifeName", "Épouse"), T("coupleAddress", "Adresse"), T("phone", "Téléphone"), T("pastorName", "Pasteur"), T("blessingPlace", "Lieu de bénédiction"),
+      { key: "status", header: "Statut", kind: "enum", labels: REGISTRY_STATUS_LABELS }],
   },
 ];
 

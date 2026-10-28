@@ -5,8 +5,10 @@
 |---|---|
 | Administrateur | Configuration (paroisses, comptes, catégories, utilisateurs, taux, paramètres). Lecture seule sur l'argent. |
 | Caissier | Saisit recettes, dépenses, opérations bancaires, effectifs, registres. Demande les modifications/annulations. Ne valide jamais. |
-| Trésorier | 1re validation, rapprochement bancaire, 1re approbation des demandes de modification/annulation. |
-| Pasteur | 2e validation, approbation finale des demandes, clôture mensuelle. |
+| Trésorier | 1re validation des écritures, rapprochement bancaire, 1re approbation des demandes de modification/annulation. |
+| Pasteur titulaire | Validateur final : 2e validation des écritures, des effectifs, des baptêmes et des mariages ; approbation finale des demandes ; clôture mensuelle. |
+| Pasteur assistant | 1re validation des effectifs des cultes, des baptêmes et des mariages ; saisie des registres. Aucun accès aux finances ni aux soldes des comptes. |
+| Évangélisation | Effectifs (membres, nouveaux venus, ouvriers), dédicaces, baptêmes, mariages. Aucun accès aux finances. |
 | Auditeur | Consultation générale, rapports, journal d'audit. Aucune saisie ni validation. |
 
 Un même utilisateur ne peut pas cumuler des rôles incompatibles dans une paroisse (le système refuse).
@@ -14,6 +16,15 @@ Un même utilisateur ne peut pas cumuler des rôles incompatibles dans une paroi
 ## Circuit d'une écriture
 Brouillon → Soumise → Validée 1 (Trésorier) → Validée (Pasteur). Un rejet exige un motif et retourne l'écriture au Caissier.
 Seules les écritures **Validées** comptent dans les soldes, le tableau de bord et les rapports.
+
+## Circuit des effectifs, baptêmes et mariages
+Mêmes états, avec le **Pasteur assistant** au premier niveau : Brouillon → Soumise → Validée 1 (Pasteur assistant) → Validée (Pasteur titulaire).
+- **Effectifs des cultes** : le Caissier compte et soumet la journée ; le Pasteur assistant puis le Pasteur titulaire valident dans *Effectifs › Cultes*. Le Trésorier ne valide plus les effectifs.
+- **Baptêmes et mariages** : l'entrée est d'abord un brouillon que **seul son auteur** modifie, supprime et soumet (*Enregistrer et soumettre* fait les deux). Les pasteurs valident depuis la page du registre (filtre *Statut › À valider*). Une entrée soumise est verrouillée ; on peut encore y joindre un document, pas en retirer.
+- Un rejet exige un motif, affiché à l'auteur ; il corrige et soumet à nouveau, et l'entrée repasse par les deux validations.
+- Les deux validations sont données par deux personnes différentes. Si l'auteur est lui-même Pasteur assistant, son niveau est sauté et seul le Pasteur titulaire valide ; si l'auteur est le Pasteur titulaire, la validation du Pasteur assistant est définitive. Le niveau sauté est indiqué sur l'entrée.
+- Une entrée validée qui contient une erreur peut être **renvoyée en correction** par le Pasteur titulaire, avec un motif.
+- Les entrées enregistrées avant la mise en place du circuit sont considérées comme validées. Les dédicaces n'ont pas de circuit.
 
 ## Corriger ou annuler une écriture validée (§27)
 1. Journal → ouvrir la ligne → « Demander une modification / annulation », avec motif obligatoire.
@@ -27,11 +38,11 @@ Le demandeur ne peut pas approuver sa propre demande. Une demande rejetée reste
 - **Banques** : versements, retraits, virements, change, frais (tenue de compte, retrait bancaire, retrait mobile money), rapprochement, clôture mensuelle.
 - **Journal** : colonnes complètes, filtres, recherche, solde d'ouverture/clôture, export Excel/PDF, impression.
 - **Engagements** : construction, partenariat, parcelle, autres ; engagé, libéré, non libéré, historique des libérations.
-- **Effectifs** : par date et par culte, sexe × nature ; membres ; ouvriers.
+- **Effectifs** : par date et par culte, sexe × nature ; membres ; ouvriers, rattachés à un département (dont **Affermissement**).
 - **Dédicace enfants / Baptême / Mariage** : registres avec téléversement et téléchargement du document.
 - **Immobilisations** : registre des biens durables (voir ci-dessous).
 - **Rapports** : 13 états exportables en Excel et PDF, imprimables.
-- **Configuration** : utilisateurs et rôles, paroisses, comptes, catégories, taux de change, paramètres, journal d'audit.
+- **Configuration** : utilisateurs et rôles (inviter ; *Modifier* le nom, l'email et les profils ; désactiver ; supprimer uniquement un compte sans historique, sinon le désactiver), paroisses, comptes, catégories, départements (ajouter, renommer), taux de change, paramètres, journal d'audit. Les alertes de solde négatif ne peuvent être envoyées qu'aux profils qui ont accès aux finances.
 
 ## Immobilisations
 Le menu **Immobilisations** tient le registre complet des biens durables : code unique, compte et sous-compte, fournisseur, localisation, coût d'acquisition, amortissement, état, historique et inventaire. Il ne génère aucune écriture comptable.

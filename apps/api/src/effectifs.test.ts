@@ -35,6 +35,10 @@ d("Effectifs, membres, ouvriers", () => {
     };
     await mk("caissier", ids.parishA!, "caissier"); await mk("caissier2", ids.parishA!, "caissier");
     await mk("tresorier", ids.parishA!, "tresorier"); await mk("auditeur", ids.parishA!, "auditeur"); await mk("caissierB", ids.parishB!, "caissier");
+    await mk("assistant", ids.parishA!, "pasteur_assistant"); await mk("pasteur", ids.parishA!, "pasteur");
+    // Not assignable through the API (conflicting roles), but the circuit must still require two people.
+    await mk("both", ids.parishA!, "pasteur_assistant");
+    await sql`insert into user_parish_roles (user_id, parish_id, role) select id, ${ids.parishA!}, 'pasteur' from users where auth0_id = ${`both-${sfx}`}`;
     const [dept] = await sql`insert into departments (parish_id, name) values (${ids.parishB!}, 'Chorale B') returning id`;
     ids.deptB = dept!.id;
     await sql.end();
@@ -61,15 +65,39 @@ d("Effectifs, membres, ouvriers", () => {
     expect((await call("caissier", "POST", "/attendance", { serviceDate: DAY, serviceType: "Inconnu", ...n(1) })).status).toBe(400);
   });
 
-  test("workflow: author cannot validate, treasurer validates, submitted rows are locked", async () => {
+  test("workflow: Pasteur assistant validates first, Pasteur titulaire last; the Trésorier no longer validates", async () => {
     const list = await json(await call("caissier", "GET", `/attendance?from=${DAY}&to=${DAY}&serviceType=${encodeURIComponent("Écodim")}`));
     const id = list[0].id;
     expect((await call("caissier", "POST", `/attendance/${id}/submit`, {})).status).toBe(200);
     expect([403, 422]).toContain((await call("caissier", "POST", `/attendance/${id}/validate1`, {})).status);
-    const v = await call("tresorier", "POST", `/attendance/${id}/validate1`, {});
-    expect(v.status).toBe(200); expect((await json(v)).status).toBe("validee1");
+    expect((await call("tresorier", "POST", `/attendance/${id}/validate1`, {})).status).toBe(422);
+    expect((await call("pasteur", "POST", `/attendance/${id}/validate1`, {})).status).toBe(422);
+    const v = await call("assistant", "POST", `/attendance/${id}/validate1`, {});
+    expect(v.status).toBe(200);
+    const v1 = await json(v);
+    expect(v1.status).toBe("validee1"); expect(v1.validator1At).toBeTruthy();
     // locked: cannot be edited once submitted
     expect((await call("caissier", "POST", "/attendance", { serviceDate: DAY, serviceType: "Écodim", ...n(99) })).status).toBe(422);
+    expect((await call("assistant", "POST", `/attendance/${id}/validate2`, {})).status).toBe(422);
+    const f = await json(await call("pasteur", "POST", `/attendance/${id}/validate2`, {}));
+    expect(f.status).toBe("validee"); expect(f.validator2At).toBeTruthy();
+  });
+
+  test("workflow: the rejection motif is stored for the author and cleared on resubmission; two different signers", async () => {
+    const list = await json(await call("caissier", "GET", `/attendance?from=${DAY}&to=${DAY}&serviceType=${encodeURIComponent("1er culte")}`));
+    const id = list[0].id;
+    expect((await call("caissier", "POST", `/attendance/${id}/submit`, {})).status).toBe(200);
+    expect((await call("assistant", "POST", `/attendance/${id}/reject`, {})).status).toBe(422); // motif required
+    expect((await call("tresorier", "POST", `/attendance/${id}/reject`, { comment: "non" })).status).toBe(422);
+    expect((await json(await call("assistant", "POST", `/attendance/${id}/reject`, { comment: "Compte des bébés à revoir" }))).status).toBe("rejetee");
+    const seen = (await json(await call("caissier", "GET", `/attendance?from=${DAY}&to=${DAY}&serviceType=${encodeURIComponent("1er culte")}`)))[0];
+    expect(seen.rejectionReason).toBe("Compte des bébés à revoir");
+    const again = await json(await call("caissier", "POST", `/attendance/${id}/submit`, {}));
+    expect(again.status).toBe("soumise"); expect(again.rejectionReason).toBeNull();
+    // one user holding both pastor roles signs level 1, then cannot also sign level 2
+    expect((await json(await call("both", "POST", `/attendance/${id}/validate1`, {}))).status).toBe("validee1");
+    expect((await call("both", "POST", `/attendance/${id}/validate2`, {})).status).toBe(422);
+    expect((await json(await call("pasteur", "POST", `/attendance/${id}/validate2`, {}))).status).toBe("validee");
   });
 
   test("members: caissier CRUD, auditeur read-only, parish isolation", async () => {

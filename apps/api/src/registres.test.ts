@@ -42,8 +42,14 @@ d("registres (dédicaces, baptêmes, mariages)", () => {
     await mk("caissier", ids.parishA!, "caissier"); await mk("pasteur", ids.parishA!, "pasteur");
     await mk("tresorier", ids.parishA!, "tresorier"); await mk("auditeur", ids.parishA!, "auditeur");
     await mk("caissierB", ids.parishB!, "caissier");
+    await mk("assistant", ids.parishA!, "pasteur_assistant"); await mk("evang", ids.parishA!, "evangelisation");
+    // Not assignable through the API (conflicting roles), but the circuit must still require two people.
+    await mk("both", ids.parishA!, "pasteur_assistant");
+    await sql`insert into user_parish_roles (user_id, parish_id, role) values (${ids.both!}, ${ids.parishA!}, 'pasteur')`;
     await sql.end();
   });
+  const json = async (r: Response) => r.json() as Promise<any>;
+  const act = (as: string, path: string, action: string, comment?: string) => call(as, "POST", `${path}/${action}`, comment === undefined ? {} : { comment });
 
   const dedic = { date: "2026-03-01", childName: "Baraka", motherName: "Marie", fatherName: "Jean", pastorName: "Past. Paul", formCompleted: true };
 
@@ -132,7 +138,104 @@ d("registres (dédicaces, baptêmes, mariages)", () => {
     expect(rows.length).toBe(1);
   });
 
-  test("pastors dropdown lists only active pasteur users of the parish", async () => {
+  // ---- circuit Pasteur assistant → Pasteur titulaire (baptêmes, mariages) -------------------------------
+
+  test("baptêmes and mariages start as drafts; dédicaces have no circuit", async () => {
+    const b = await json(await call("evang", "POST", "/baptisms", { fullName: "Draft", date: "2026-02-01" }));
+    expect(b.status).toBe("brouillon");
+    const dd = await json(await call("evang", "POST", "/dedications", dedic));
+    expect(dd.status).toBeUndefined();
+    expect((await act("evang", `/dedications/${dd.id}`, "submit")).status).toBe(404);
+  });
+
+  test("full circuit: author submits, Pasteur assistant then Pasteur titulaire sign; the entry is frozen once submitted", async () => {
+    const m = await json(await call("evang", "POST", "/marriages", { husbandName: "Époux", wifeName: "Épouse", date: "2026-03-01" }));
+    const path = `/marriages/${m.id}`;
+    // a draft belongs to its author
+    expect((await call("caissier", "PATCH", path, { husbandName: "X" })).status).toBe(422);
+    expect((await call("caissier", "DELETE", path)).status).toBe(422);
+    expect((await act("caissier", path, "submit")).status).toBe(422);
+    expect((await act("tresorier", path, "submit")).status).toBe(403);
+    const s1 = await json(await act("evang", path, "submit"));
+    expect(s1.status).toBe("soumise"); expect(s1.submittedAt).toBeTruthy();
+    expect((await call("evang", "PATCH", path, { husbandName: "Changé" })).status).toBe(422);
+    for (const r of ["tresorier", "pasteur", "evang", "auditeur"]) expect((await act(r, path, "validate1")).status).toBe(403);
+    const v1 = await json(await act("assistant", path, "validate1"));
+    expect(v1.status).toBe("validee1"); expect(v1.validator1Id).toBe(ids.assistant);
+    expect((await act("assistant", path, "validate2")).status).toBe(403);
+    const v2 = await json(await act("pasteur", path, "validate2"));
+    expect(v2.status).toBe("validee"); expect(v2.validator2Id).toBe(ids.pasteur);
+    expect((await act("pasteur", path, "validate2")).status).toBe(422);
+    expect((await call("evang", "DELETE", path)).status).toBe(422);
+    // certificates often arrive late: a file can still be attached, but not removed
+    const f = await json(await upload("evang", `${path}/files`, png()));
+    expect((await call("evang", "DELETE", `/files/${f.id}`)).status).toBe(422);
+    const listed = (await json(await call("caissier", "GET", "/marriages?status=validee"))).find((x: any) => x.id === m.id);
+    expect(listed).toMatchObject({ createdByName: "evang", validator1Name: "assistant", validator2Name: "pasteur", fileCount: 1 });
+    expect((await json(await call("caissier", "GET", "/marriages?status=soumise"))).some((x: any) => x.id === m.id)).toBe(false);
+    expect(await json(await call("caissier", "GET", "/marriages?status=none"))).toEqual([]);
+    // the database refuses a direct change to a validated entry
+    const sql = postgres(ADMIN_URL!);
+    // postgres.js queries only run once .then() is called, which expect().rejects does not do
+    const error = (q: PromiseLike<unknown>) => q.then(() => "aucune erreur", (e: Error) => e.message);
+    expect(await error(sql`update marriages set husband_name = 'Forcé' where id = ${m.id}`)).toContain("modification interdite");
+    expect(await error(sql`update marriages set status = 'brouillon' where id = ${m.id}`)).toContain("renvoyé en correction");
+    const audit = await sql`select action from audit_log where entity_id = ${m.id} order by at`;
+    await sql.end();
+    expect(audit.map((r) => r.action)).toEqual(expect.arrayContaining(["marriage.submit", "marriage.validate1", "marriage.validate2"]));
+  });
+
+  test("rejection motif is shown to the author and cleared on resubmission; the titulaire can send back for correction", async () => {
+    const b = await json(await call("evang", "POST", "/baptisms", { fullName: "Rejet", date: "2026-03-02" }));
+    const path = `/baptisms/${b.id}`;
+    await act("evang", path, "submit");
+    expect((await act("assistant", path, "reject")).status).toBe(422);
+    const r1 = await json(await act("assistant", path, "reject", "Date à vérifier"));
+    expect(r1.status).toBe("rejetee"); expect(r1.rejectionReason).toBe("Date à vérifier");
+    expect((await call("evang", "PATCH", path, { date: "2026-03-03" })).status).toBe(200);
+    const s2 = await json(await act("evang", path, "submit"));
+    expect(s2.status).toBe("soumise"); expect(s2.rejectionReason).toBeNull();
+    await act("assistant", path, "validate1");
+    expect((await json(await act("pasteur", path, "reject", "Nom incomplet"))).status).toBe("rejetee");
+    await act("evang", path, "submit");
+    await act("assistant", path, "validate1");
+    expect((await json(await act("pasteur", path, "validate2"))).status).toBe("validee");
+    // Renvoyer en correction: titulaire only, with a motif; the author then corrects and resubmits through both levels
+    expect((await act("assistant", path, "reopen", "x")).status).toBe(403);
+    expect((await act("pasteur", path, "reopen")).status).toBe(422);
+    const re = await json(await act("pasteur", path, "reopen", "Faute dans le nom"));
+    expect(re.status).toBe("rejetee"); expect(re.rejectionReason).toBe("Faute dans le nom");
+    expect((await call("evang", "PATCH", path, { fullName: "Rejet corrigé" })).status).toBe(200);
+    expect((await json(await act("evang", path, "submit"))).validator1Id).toBeNull();
+  });
+
+  test("creator-skip: an assistant's entry goes to the titulaire alone; a titulaire's entry is final after the assistant", async () => {
+    const a = await json(await call("assistant", "POST", "/baptisms", { fullName: "Par l'assistant", date: "2026-03-04" }));
+    const sa = await json(await act("assistant", `/baptisms/${a.id}`, "submit"));
+    expect(sa).toMatchObject({ status: "validee1", n1Skipped: true, n2Skipped: false });
+    expect((await json(await act("pasteur", `/baptisms/${a.id}`, "validate2"))).status).toBe("validee");
+
+    const p = await json(await call("pasteur", "POST", "/marriages", { husbandName: "P", wifeName: "Q", date: "2026-03-04" }));
+    const sp = await json(await act("pasteur", `/marriages/${p.id}`, "submit"));
+    expect(sp).toMatchObject({ status: "soumise", n1Skipped: false, n2Skipped: true });
+    const fin = await json(await act("assistant", `/marriages/${p.id}`, "validate1"));
+    expect(fin.status).toBe("validee"); expect(fin.validator2Id).toBeNull();
+
+    const both = await json(await call("both", "POST", "/baptisms", { fullName: "Cumul", date: "2026-03-04" }));
+    expect((await act("both", `/baptisms/${both.id}`, "submit")).status).toBe(422);
+  });
+
+  test("the two levels are signed by two different people; other parishes cannot act", async () => {
+    const b = await json(await call("evang", "POST", "/baptisms", { fullName: "Deux signatures", date: "2026-03-05" }));
+    const path = `/baptisms/${b.id}`;
+    await act("evang", path, "submit");
+    expect((await call("caissierB", "POST", `${path}/submit`, {}, ids.parishB)).status).toBe(404);
+    expect((await json(await act("both", path, "validate1"))).status).toBe("validee1");
+    expect((await act("both", path, "validate2")).status).toBe(422);
+    expect((await json(await act("pasteur", path, "validate2"))).status).toBe("validee");
+  });
+
+  test("pastors dropdown lists the active Pasteurs titulaires and assistants of the parish, once each", async () => {
     const sql = postgres(ADMIN_URL!);
     const [u] = await sql`insert into users (auth0_id, email, full_name, active) values (${`gone-${sfx}`}, ${`gone-${sfx}@t.org`}, 'Pasteur inactif', false) returning id`;
     await sql`insert into user_parish_roles (user_id, parish_id, role) values (${u!.id}, ${ids.parishA!}, 'pasteur')`;
@@ -140,7 +243,7 @@ d("registres (dédicaces, baptêmes, mariages)", () => {
     for (const r of ["caissier", "auditeur"]) {
       const res = await call(r, "GET", "/pastors");
       expect(res.status).toBe(200);
-      expect((await res.json() as any[]).map((p) => p.fullName)).toEqual(["pasteur"]);
+      expect((await res.json() as any[]).map((p) => p.fullName)).toEqual(["assistant", "both", "pasteur"]);
     }
     // parish B has no pastor
     expect((await (await call("caissierB", "GET", "/pastors", undefined, ids.parishB)).json()) as any[]).toEqual([]);

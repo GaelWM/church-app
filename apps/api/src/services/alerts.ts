@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { parishes, userParishRoles, users, withScope, type Db } from "@church/db";
 import { negativeBalanceEmail } from "@church/emails";
+import { isFinanceRole } from "@church/shared";
 import type { Mailer } from "./mailer";
 import { safeSend } from "./mailer";
 import { getSettings } from "../modules/settings/settings.service";
@@ -27,9 +28,10 @@ export async function checkNegativeBalances(db: Db, mailer: Mailer, appUrl: stri
     if (!found) continue;
     const { s, low, threshold } = found;
     const fmt = (m: bigint, cur: string) => `${new Intl.NumberFormat("fr-FR").format(Number(m) / 100)} ${cur}`;
-    const roleEmails = s.alert_recipients.roles.length
+    const roles = s.alert_recipients.roles.filter(isFinanceRole); // balances: never to a no-finance profile
+    const roleEmails = roles.length
       ? await db.select({ email: users.email }).from(users).innerJoin(userParishRoles, eq(userParishRoles.userId, users.id))
-        .where(and(eq(userParishRoles.parishId, p.id), inArray(userParishRoles.role, s.alert_recipients.roles), eq(users.active, true)))
+        .where(and(eq(userParishRoles.parishId, p.id), inArray(userParishRoles.role, roles), eq(users.active, true)))
       : [];
     const to = [...new Set([...roleEmails.map((r) => r.email), ...s.alert_recipients.extra_emails])];
     const msg = negativeBalanceEmail({

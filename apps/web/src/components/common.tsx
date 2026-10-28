@@ -36,8 +36,9 @@ export function Dot({ className }: { className: string }) {
   return <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", className)} />;
 }
 
-export function StatusBadge({ status }: { status: TxStatus }) {
-  return <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"><Dot className={STATUS_DOT[status]} />{STATUS_LABELS[status]}</span>;
+/** `labels`: REGISTRY_STATUS_LABELS for effectifs and registers, whose level 1 is the Pasteur assistant. */
+export function StatusBadge({ status, labels = STATUS_LABELS }: { status: TxStatus; labels?: Record<TxStatus, string> }) {
+  return <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"><Dot className={STATUS_DOT[status]} />{labels[status]}</span>;
 }
 
 export type Tone = "success" | "warning" | "destructive" | "muted" | "info";

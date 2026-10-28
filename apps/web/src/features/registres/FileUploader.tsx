@@ -15,9 +15,10 @@ export const checkFile = (f: File) =>
 /**
  * Files attached to one record: upload (photo / scan), view, download, delete. Defaults to a register entry;
  * `listPath` / `filePath` point it at another module's endpoints (e.g. the files of a fixed asset).
+ * `canDelete` (default `canWrite`): a submitted baptême / mariage still takes new files but keeps the ones it has.
  */
-export function FileUploader({ type, recordId, label, canWrite, listPath, filePath }: {
-  type: string; recordId: string; label: string; canWrite: boolean; listPath?: string; filePath?: string;
+export function FileUploader({ type, recordId, label, canWrite, canDelete = canWrite, listPath, filePath }: {
+  type: string; recordId: string; label: string; canWrite: boolean; canDelete?: boolean; listPath?: string; filePath?: string;
 }) {
   const list = listPath ?? `/registres/${type}/${recordId}/files`;
   const item = filePath ?? "/registres/files";
@@ -58,7 +59,7 @@ export function FileUploader({ type, recordId, label, canWrite, listPath, filePa
               <span className="actions shrink-0">
                 <Button type="button" size="icon-sm" variant="ghost" aria-label="Voir" onClick={() => open(f, false)}><Eye /></Button>
                 <Button type="button" size="icon-sm" variant="ghost" aria-label="Télécharger" onClick={() => open(f, true)}><Download /></Button>
-                {canWrite && <Button type="button" size="icon-sm" variant="ghost" aria-label="Supprimer le fichier" onClick={() => confirm(`Supprimer « ${f.filename} » ?`) && del.mutate(f.id)}><Trash2 /></Button>}
+                {canDelete && <Button type="button" size="icon-sm" variant="ghost" aria-label="Supprimer le fichier" onClick={() => confirm(`Supprimer « ${f.filename} » ?`) && del.mutate(f.id)}><Trash2 /></Button>}
               </span>
             </li>
           ))}

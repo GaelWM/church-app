@@ -30,7 +30,7 @@ async function mgmt(env: Bindings, path: string, init: RequestInit = {}) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers },
   });
   if (!res.ok) throw new Error(`Auth0 ${path} failed: ${res.status} ${await res.text()}`);
-  return res.json() as Promise<any>;
+  return res.status === 204 ? null : (res.json() as Promise<any>);
 }
 
 export async function createAuth0User(env: Bindings, email: string, fullName: string) {
@@ -55,4 +55,15 @@ export async function passwordSetLink(env: Bindings, auth0Id: string): Promise<s
 export async function setAuth0Blocked(env: Bindings, auth0Id: string, blocked: boolean) {
   if (devAuthEnabled(env)) return;
   await mgmt(env, `/users/${encodeURIComponent(auth0Id)}`, { method: "PATCH", body: JSON.stringify({ blocked }) });
+}
+
+/** A new email is marked unverified by Auth0, which sends a verification email to it. */
+export async function updateAuth0User(env: Bindings, auth0Id: string, p: { email?: string; fullName?: string }) {
+  if (devAuthEnabled(env)) return;
+  await mgmt(env, `/users/${encodeURIComponent(auth0Id)}`, { method: "PATCH", body: JSON.stringify({ email: p.email, name: p.fullName }) });
+}
+
+export async function deleteAuth0User(env: Bindings, auth0Id: string) {
+  if (devAuthEnabled(env)) return;
+  await mgmt(env, `/users/${encodeURIComponent(auth0Id)}`, { method: "DELETE" });
 }
